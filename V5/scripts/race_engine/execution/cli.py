@@ -7,7 +7,7 @@ import csv
 import json
 from pathlib import Path
 
-from race_engine.execution.order_list import proposed_order
+from race_engine.execution.pipeline import run_standalone_pipeline
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Standalone RACE Engine dry-run")
@@ -29,28 +29,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     output_folder = Path(args.race_output_folder)
     output_folder.mkdir(parents=True, exist_ok=True)
-    diagnostic_only = args.race_validation_status == "FAIL" or (
-        args.race_validation_status == "WARN" and not args.race_allow_warn_dry_run
-    )
     positions = _read_positions(Path(args.race_current_positions_csv)) if args.race_current_positions_csv else {}
-    orders = [
-        proposed_order(
-            ticker=ticker,
-            target_weight=current_weight,
-            current_weight=current_weight,
-            portfolio_value=100_000.0,
-            price=100.0,
-            reason_code="DRY_RUN_NO_CHANGE",
-            priority="DIAGNOSTIC",
-            trade_quality_status="DIAGNOSTIC_ONLY" if diagnostic_only else "READY_FOR_MANUAL_REVIEW",
-        ).__dict__
-        for ticker, current_weight in positions.items()
-    ]
-    artifact = {
-        "diagnostic_only": diagnostic_only,
-        "validation_status": args.race_validation_status,
-        "orders": orders,
-    }
+    artifact = run_standalone_pipeline(
+        config_path=args.race_config,
+        market_data_cache=args.race_market_data_cache,
+        current_positions=positions,
+        validation_status=args.race_validation_status,
+        allow_warn_dry_run=args.race_allow_warn_dry_run,
+    )
     (output_folder / "race_order_list.json").write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
     if args.race_write_atsh_handoff:
         from race_engine.reporting.ats_handoff import race_dry_run_panel

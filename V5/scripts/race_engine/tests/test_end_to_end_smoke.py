@@ -28,5 +28,5 @@ def test_end_to_end_smoke_report_generation_and_cli(tmp_path) -> None:
 
     artifact = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
     assert artifact["diagnostic_only"] is True
-    assert artifact["orders"][0]["trade_quality_status"] == "DIAGNOSTIC_ONLY"
-
+    assert artifact["orders"] == []
+    assert artifact["validation_messages"]
