@@ -28,3 +28,7 @@ logs/
 .env
 .venv/
 MyPythonVirtualEnv/
+
+V5/scripts/race_engine_out/
+race_engine_out/
+
