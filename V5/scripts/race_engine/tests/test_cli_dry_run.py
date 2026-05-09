@@ -1,12 +1,6 @@
 import json
 
-from add_trim_sell_hold import main as atsh_main
 from race_engine.execution.cli import main
-
-
-def test_existing_behavior_unchanged_without_flag(capsys) -> None:
-    assert atsh_main([]) == 0
-    assert "RACE engine disabled" in capsys.readouterr().out
 
 
 def test_dry_run_order_list_generated_but_not_transmitted(tmp_path) -> None:
@@ -26,7 +20,7 @@ def test_dry_run_order_list_generated_but_not_transmitted(tmp_path) -> None:
     data = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
     assert data["diagnostic_only"] is False
     assert data["orders"][0]["ticker"] == "SPY"
-    assert (tmp_path / "race_ats_handoff.md").exists()
+    assert not (tmp_path / "race_ats_handoff.md").exists()
 
 
 def test_validation_fail_blocks_actionable_labeling(tmp_path) -> None:
@@ -58,3 +52,15 @@ def test_warn_requires_explicit_allow_flag(tmp_path) -> None:
     allowed = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
     assert allowed["diagnostic_only"] is False
 
+
+def test_atsh_handoff_is_optional_downstream_output(tmp_path) -> None:
+    main([
+        "--race-engine-enable",
+        "--race-output-folder",
+        str(tmp_path),
+        "--race-validation-status",
+        "PASS",
+        "--race-write-atsh-handoff",
+    ])
+
+    assert (tmp_path / "race_ats_handoff.md").exists()

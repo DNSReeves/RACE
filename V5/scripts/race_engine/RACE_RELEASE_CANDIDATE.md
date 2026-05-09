@@ -6,7 +6,9 @@ Schema version: `race.audit.v1`
 
 Current status: **WARN for dry-run use**.
 
-The implementation scaffolding, deterministic modules, audit/report outputs, and dry-run CLI are present. RACE is not production-trading-ready. It must remain diagnostic-only until recorded out-of-sample validation artifacts, ablation results, sensitivity sweeps, and 8-12 weeks of dry-run audit consistency support promotion.
+The implementation scaffolding, deterministic modules, audit/report outputs, and standalone dry-run CLI are present. RACE is not production-trading-ready. It must remain diagnostic-only until recorded out-of-sample validation artifacts, ablation results, sensitivity sweeps, and 8-12 weeks of dry-run audit consistency support promotion.
+
+RACE is standalone. `add_trim_sell_hold.py` is not part of the core strategy; it is only an optional ATSH compatibility bridge. Any ATSH handoff is downstream of the core RACE run.
 
 ## Implementation Coverage
 
@@ -15,6 +17,7 @@ The implementation scaffolding, deterministic modules, audit/report outputs, and
 - Regime signals, persistence, blending, and recovery exception: complete.
 - Universe, substitution, fallbacks, ETF ranking, risk gates, construction, risk budget, and trade quality: complete.
 - Backtest, sensitivity, ablation, validation, audit, reports, and dry-run CLI: complete.
+- Optional ATSH bridge: isolated from the standalone validation path.
 
 ## Validation And Falsification
 
@@ -37,7 +40,7 @@ Execution behavior is not authorized unless all gates pass:
 - Sensitivity robust across required sweeps.
 - Trade-quality counterfactual positive or turnover-beneficial.
 - 8-12 weeks of dry-run audit consistency.
-- No schema, harness, or sanity failures.
+- No standalone schema or validation failures.
 
 ## Rollback Rules
 
@@ -54,12 +57,14 @@ Rollback to diagnostic-only on:
 
 - Numeric sleeve min/max and drift defaults are encoded locally because the markdown task package does not provide all underlying specification values.
 - Dry-run order output is generated for manual review only and is never transmitted to a broker.
+- `dbloader.py` remains a general-purpose database loader and is not modified by RACE.
+- `summary_dict_debug.json` is ATSH-specific and is checked only by the optional ATSH bridge validation script.
 
 ## Dry-Run Command Examples
 
 ```powershell
-python add_trim_sell_hold.py --race-engine-enable --race-current-positions-csv positions.csv --race-output-folder out\race --race-validation-status FAIL
-python add_trim_sell_hold.py --race-engine-enable --race-current-positions-csv positions.csv --race-output-folder out\race --race-validation-status WARN --race-allow-warn-dry-run
+python -m race_engine.execution.cli --race-engine-enable --race-current-positions-csv positions.csv --race-output-folder out\race --race-validation-status FAIL
+python -m race_engine.execution.cli --race-engine-enable --race-current-positions-csv positions.csv --race-output-folder out\race --race-validation-status WARN --race-allow-warn-dry-run
 python scripts\run_race_full_validation.py
+python scripts\run_race_atsh_bridge_validation.py
 ```
-

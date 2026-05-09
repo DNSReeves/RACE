@@ -1,4 +1,4 @@
-"""RACE dry-run CLI integration."""
+"""Standalone RACE dry-run CLI."""
 
 from __future__ import annotations
 
@@ -8,11 +8,9 @@ import json
 from pathlib import Path
 
 from race_engine.execution.order_list import proposed_order
-from race_engine.reporting.ats_handoff import race_dry_run_panel
-
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="RACE Engine dry-run")
+    parser = argparse.ArgumentParser(description="Standalone RACE Engine dry-run")
     parser.add_argument("--race-engine-enable", action="store_true")
     parser.add_argument("--race-config")
     parser.add_argument("--race-market-data-cache")
@@ -20,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--race-output-folder", default="race_engine_out")
     parser.add_argument("--race-validation-status", choices=("PASS", "WARN", "FAIL"), default="FAIL")
     parser.add_argument("--race-allow-warn-dry-run", action="store_true")
+    parser.add_argument("--race-write-atsh-handoff", action="store_true")
     return parser
 
 
@@ -53,7 +52,10 @@ def main(argv: list[str] | None = None) -> int:
         "orders": orders,
     }
     (output_folder / "race_order_list.json").write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
-    (output_folder / "race_ats_handoff.md").write_text(race_dry_run_panel(artifact), encoding="utf-8")
+    if args.race_write_atsh_handoff:
+        from race_engine.reporting.ats_handoff import race_dry_run_panel
+
+        (output_folder / "race_ats_handoff.md").write_text(race_dry_run_panel(artifact), encoding="utf-8")
     return 0
 
 
@@ -69,4 +71,3 @@ def _read_positions(path: Path) -> dict[str, float]:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
