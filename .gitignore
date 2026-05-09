@@ -1,0 +1,30 @@
+# Large reference/media artifacts
+*.mp4
+*.m4a
+*.pptx
+*.pdf
+*.png
+*.zip
+
+# Codex task package artifacts
+race_codex_task_markdown_package_revised_dbloader_boundary/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime outputs
+summary_dict_debug.json
+portfolio_summary.html
+out.dir/
+logs/
+*.log
+
+# Local environment/secrets
+.env
+.venv/
+MyPythonVirtualEnv/
