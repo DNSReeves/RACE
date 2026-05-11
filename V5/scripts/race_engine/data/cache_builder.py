@@ -76,12 +76,15 @@ class CacheBuildResult:
     metric_rows: int
     macro_rows: int
     warnings: tuple[str, ...]
+    registry_tables: tuple[str, ...] = ()
 
 
 def build_race_market_cache(
     source_database: str | Path,
     output_database: str | Path = "race_engine_out/race_market_cache.sqlite",
     mapping: SourceMapping | None = None,
+    source_registry_database: str | Path | None = None,
+    registry_schema_file: str | Path | None = None,
 ) -> CacheBuildResult:
     """Translate a generic local ETF database into the RACE cache schema.
 
@@ -93,17 +96,27 @@ def build_race_market_cache(
     output_path = Path(output_database)
     config = mapping or SourceMapping()
     warnings: list[str] = []
+    registry_schema = _parse_registry_schema(Path(registry_schema_file)) if registry_schema_file else {}
+    registry_tables = tuple(registry_schema)
+    if registry_schema:
+        _validate_expected_registry_schema(registry_schema)
+        config = _mapping_for_registry_schema(config, registry_schema)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with _connect_read_only(source_path) as source, sqlite3.connect(output_path) as target:
+    registry_path = Path(source_registry_database) if source_registry_database else source_path
+    with (
+        _connect_read_only(source_path) as source,
+        _connect_read_only(registry_path) as registry_source,
+        sqlite3.connect(output_path) as target,
+    ):
         _create_target_schema(target)
         tickers = required_price_tickers()
         price_rows = _copy_prices(source, target, config, tickers)
-        metric_rows = _copy_metrics(source, target, config, tickers, warnings)
+        metric_rows = _copy_metrics(registry_source, target, config, tickers, warnings)
         macro_rows = _copy_macro(source, target, config, warnings)
         target.commit()
 
-    return CacheBuildResult(output_path, price_rows, metric_rows, macro_rows, tuple(warnings))
+    return CacheBuildResult(output_path, price_rows, metric_rows, macro_rows, tuple(warnings), registry_tables)
 
 
 def required_price_tickers() -> tuple[str, ...]:
@@ -228,6 +241,111 @@ def _copy_metrics(
     return rows_written
 
 
+def _parse_registry_schema(path: Path) -> dict[str, tuple[str, ...]]:
+    sql = path.read_text(encoding="utf-8")
+    tables: dict[str, tuple[str, ...]] = {}
+    cursor = 0
+    marker = "CREATE TABLE "
+    upper_sql = sql.upper()
+    while True:
+        start = upper_sql.find(marker, cursor)
+        if start == -1:
+            break
+        name_start = start + len(marker)
+        paren_start = sql.find("(", name_start)
+        if paren_start == -1:
+            break
+        table_name = sql[name_start:paren_start].strip().strip('"`[]')
+        paren_end = _matching_paren(sql, paren_start)
+        body = sql[paren_start + 1 : paren_end]
+        columns = []
+        for item in _split_sql_list(body):
+            token = item.strip().split(None, 1)[0].strip('"`[],')
+            if token.upper() in {"PRIMARY", "FOREIGN", "UNIQUE", "CHECK", "CONSTRAINT"}:
+                continue
+            if token:
+                columns.append(token)
+        tables[table_name] = tuple(columns)
+        cursor = paren_end + 1
+    return tables
+
+
+def _validate_expected_registry_schema(schema: dict[str, tuple[str, ...]]) -> None:
+    required = {
+        "etf_registry": ("ticker",),
+        "etf_metrics": ("ticker", "aum", "expense_ratio", "last_updated"),
+        "etf_sectors": ("ticker", "industry", "exposure"),
+        "loading_history": ("ticker", "load_date", "status"),
+        "loading_sessions": ("session_start",),
+    }
+    missing_tables = [table for table in required if table not in schema]
+    if missing_tables:
+        raise ValueError(f"registry schema missing expected tables: {', '.join(missing_tables)}")
+    missing_columns = []
+    for table, columns in required.items():
+        available = set(schema[table])
+        for column in columns:
+            if column not in available:
+                missing_columns.append(f"{table}.{column}")
+    if missing_columns:
+        raise ValueError(f"registry schema missing expected columns: {', '.join(missing_columns)}")
+
+
+def _mapping_for_registry_schema(mapping: SourceMapping, schema: dict[str, tuple[str, ...]]) -> SourceMapping:
+    metrics_columns = set(schema.get(mapping.metrics_table, ()))
+    metrics_as_of = "last_updated" if "last_updated" in metrics_columns else mapping.metrics_as_of
+    bid_ask_spread = mapping.metrics_bid_ask_spread if mapping.metrics_bid_ask_spread in metrics_columns else "__missing_bid_ask_spread__"
+    return SourceMapping(
+        price_table=mapping.price_table,
+        price_ticker=mapping.price_ticker,
+        price_date=mapping.price_date,
+        price_open=mapping.price_open,
+        price_high=mapping.price_high,
+        price_low=mapping.price_low,
+        price_close=mapping.price_close,
+        price_adjusted_close=mapping.price_adjusted_close,
+        price_volume=mapping.price_volume,
+        metrics_table=mapping.metrics_table,
+        metrics_ticker=mapping.metrics_ticker,
+        metrics_as_of=metrics_as_of,
+        metrics_aum=mapping.metrics_aum,
+        metrics_expense_ratio=mapping.metrics_expense_ratio,
+        metrics_bid_ask_spread=bid_ask_spread,
+        macro_table=mapping.macro_table,
+        macro_series=mapping.macro_series,
+        macro_date=mapping.macro_date,
+        macro_value=mapping.macro_value,
+    )
+
+
+def _matching_paren(sql: str, start: int) -> int:
+    depth = 0
+    for index in range(start, len(sql)):
+        if sql[index] == "(":
+            depth += 1
+        elif sql[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+    raise ValueError("unclosed CREATE TABLE statement in registry schema")
+
+
+def _split_sql_list(body: str) -> tuple[str, ...]:
+    parts = []
+    start = 0
+    depth = 0
+    for index, char in enumerate(body):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(body[start:index])
+            start = index + 1
+    parts.append(body[start:])
+    return tuple(parts)
+
+
 def _copy_macro(
     source: sqlite3.Connection,
     target: sqlite3.Connection,
@@ -287,4 +405,3 @@ def _require_columns(connection: sqlite3.Connection, table: str, columns: tuple[
 
 def _column_or_null(available: set[str], column: str) -> str:
     return column if column in available else "null"
-

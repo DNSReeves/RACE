@@ -81,3 +81,28 @@ python scripts\build_race_market_cache.py --source-db generic.sqlite --adjusted-
 
 The source database is opened read-only. The builder writes only the RACE-specific cache.
 
+## Registry Database Metadata
+
+Registry-side ETF metadata is described by:
+
+```text
+C:\Users\david\Development\Python\ta_optimizer.dir\etf_trading\etf_trading_system\databases\etf_registry_schema.sql
+```
+
+Use that SQL file as the authoritative registry schema when building from a separate registry database:
+
+```powershell
+python scripts\build_race_market_cache.py --source-db path\to\market.sqlite --source-registry-db path\to\registry.sqlite --registry-schema-file C:\Users\david\Development\Python\ta_optimizer.dir\etf_trading\etf_trading_system\databases\etf_registry_schema.sql
+```
+
+Important registry tables currently include:
+
+- `etf_registry`
+- `etf_metrics`
+- `etf_sectors`
+- `loading_history`
+- `loading_sessions`
+
+The RACE cache builder uses registry `etf_metrics.ticker`, `etf_metrics.aum`, `etf_metrics.expense_ratio`, and `etf_metrics.last_updated`. Registry `last_updated` is translated into RACE cache `etf_metrics.as_of`.
+
+The documented registry schema does not include a bid-ask spread field. When the registry database is used as the metrics source, RACE cache `etf_metrics.bid_ask_spread` is left null unless a future schema adds an explicit source column.

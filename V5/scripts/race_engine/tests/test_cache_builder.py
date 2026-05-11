@@ -60,6 +60,32 @@ def test_cache_builder_reports_missing_optional_tables(tmp_path) -> None:
     assert "macro table not found: macro_observations" in result.warnings
 
 
+def test_cache_builder_uses_registry_db_and_authoritative_schema_file(tmp_path) -> None:
+    source = tmp_path / "generic_market.sqlite"
+    registry = tmp_path / "registry.sqlite"
+    schema = tmp_path / "etf_registry_schema.sql"
+    output = tmp_path / "race_market_cache.sqlite"
+    _create_price_macro_source_db(source)
+    _create_registry_db(registry)
+    schema.write_text(_registry_schema_sql(), encoding="utf-8")
+
+    result = build_race_market_cache(
+        source,
+        output,
+        source_registry_database=registry,
+        registry_schema_file=schema,
+    )
+
+    assert "etf_registry" in result.registry_tables
+    assert "etf_metrics" in result.registry_tables
+    assert result.metric_rows > 0
+    with sqlite3.connect(output) as connection:
+        row = connection.execute(
+            "select as_of, aum, expense_ratio, bid_ask_spread from etf_metrics where ticker = 'SPY'"
+        ).fetchone()
+    assert row == ("2026-01-03 12:00:00", 200_000_000.0, 0.09, None)
+
+
 def _create_source_db(path):
     tickers = required_price_tickers()
     start = date(2026, 1, 1)
@@ -90,3 +116,136 @@ def _create_source_db(path):
             connection.execute("insert into macro_observations values ('T10Y2Y', ?, ?)", (current.isoformat(), 0.5))
             connection.execute("insert into macro_observations values ('BAMLH0A0HYM2', ?, ?)", (current.isoformat(), 300.0))
 
+
+def _create_price_macro_source_db(path):
+    tickers = required_price_tickers()
+    start = date(2026, 1, 1)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "create table prices (ticker text, date text, open real, high real, low real, close real, adjusted_close real, volume real)"
+        )
+        connection.execute(
+            "create table macro_observations (series_name text, date text, value real)"
+        )
+        for ticker in tickers:
+            for offset in range(3):
+                value = 100 + offset
+                connection.execute(
+                    "insert into prices values (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (ticker, (start + timedelta(days=offset)).isoformat(), value, value, value, value, value, 1000),
+                )
+        for offset in range(3):
+            current = start + timedelta(days=offset)
+            connection.execute("insert into macro_observations values ('T10YIE', ?, ?)", (current.isoformat(), 2.0 + offset))
+            connection.execute("insert into macro_observations values ('T10Y2Y', ?, ?)", (current.isoformat(), 0.5))
+            connection.execute("insert into macro_observations values ('BAMLH0A0HYM2', ?, ?)", (current.isoformat(), 300.0))
+
+
+def _create_registry_db(path):
+    tickers = required_price_tickers()
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "create table etf_registry (id integer primary key autoincrement, ticker text unique not null, name text, inception_date date, first_data_date date, last_update_date date, last_successful_load date, data_quality_score real default 0.0, load_status text default 'pending', error_count integer default 0, last_error text, notes text, created_at timestamp default current_timestamp, updated_at timestamp default current_timestamp, exchange text default 'US', asset_class text, sector text, total_rows integer default 0, is_leveraged boolean default 0, is_inverse boolean default 0, is_etn boolean default 0, expense_ratio real)"
+        )
+        connection.execute(
+            "create table etf_metrics (ticker text primary key, name text, aum real, expense_ratio real, holdings_count integer, inception_date date, asset_class text, etf_company text, domicile text, nav real, nav_currency text, avg_volume integer, cusip text, isin text, symbol text, website text, description text, last_updated timestamp default current_timestamp, created_at timestamp default current_timestamp, metrics_source text)"
+        )
+        connection.execute(
+            "create table etf_sectors (id integer primary key autoincrement, ticker text not null, industry text not null, exposure real not null, created_at timestamp default current_timestamp, unique(ticker, industry))"
+        )
+        connection.execute(
+            "create table loading_history (id integer primary key autoincrement, ticker text not null, load_date date not null, data_start_date date, data_end_date date, rows_loaded integer, load_duration_seconds real, status text, error_message text, created_at timestamp default current_timestamp, load_type text default 'incremental', notes text)"
+        )
+        connection.execute(
+            "create table loading_sessions (id integer primary key autoincrement, session_start timestamp default current_timestamp, session_end timestamp, total_etfs integer, successful_loads integer, failed_loads integer, total_rows_loaded integer, session_notes text, session_type text default 'daily')"
+        )
+        for ticker in tickers:
+            connection.execute("insert into etf_registry (ticker) values (?)", (ticker,))
+            connection.execute(
+                "insert into etf_metrics (ticker, name, aum, expense_ratio, last_updated) values (?, ?, ?, ?, ?)",
+                (ticker, ticker, 200_000_000.0, 0.09, "2026-01-03 12:00:00"),
+            )
+
+
+def _registry_schema_sql():
+    return """
+CREATE TABLE etf_registry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT UNIQUE NOT NULL,
+    name TEXT,
+    inception_date DATE,
+    first_data_date DATE,
+    last_update_date DATE,
+    last_successful_load DATE,
+    data_quality_score REAL DEFAULT 0.0,
+    load_status TEXT DEFAULT 'pending',
+    error_count INTEGER DEFAULT 0,
+    last_error TEXT,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    exchange TEXT DEFAULT 'US',
+    asset_class TEXT,
+    sector TEXT,
+    total_rows INTEGER DEFAULT 0,
+    is_leveraged BOOLEAN DEFAULT 0,
+    is_inverse BOOLEAN DEFAULT 0,
+    is_etn BOOLEAN DEFAULT 0,
+    expense_ratio REAL
+);
+CREATE TABLE etf_metrics (
+    ticker TEXT PRIMARY KEY,
+    name TEXT,
+    aum REAL,
+    expense_ratio REAL,
+    holdings_count INTEGER,
+    inception_date DATE,
+    asset_class TEXT,
+    etf_company TEXT,
+    domicile TEXT,
+    nav REAL,
+    nav_currency TEXT,
+    avg_volume INTEGER,
+    cusip TEXT,
+    isin TEXT,
+    symbol TEXT,
+    website TEXT,
+    description TEXT,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metrics_source TEXT
+);
+CREATE TABLE etf_sectors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    industry TEXT NOT NULL,
+    exposure REAL NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(ticker, industry)
+);
+CREATE TABLE loading_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker TEXT NOT NULL,
+    load_date DATE NOT NULL,
+    data_start_date DATE,
+    data_end_date DATE,
+    rows_loaded INTEGER,
+    load_duration_seconds REAL,
+    status TEXT,
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    load_type TEXT DEFAULT 'incremental',
+    notes TEXT
+);
+CREATE TABLE loading_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    session_end TIMESTAMP,
+    total_etfs INTEGER,
+    successful_loads INTEGER,
+    failed_loads INTEGER,
+    total_rows_loaded INTEGER,
+    session_notes TEXT,
+    session_type TEXT DEFAULT 'daily'
+);
+"""
