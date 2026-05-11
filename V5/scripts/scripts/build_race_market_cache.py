@@ -24,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--metrics-table", default="etf_metrics")
     parser.add_argument("--macro-table", default="macro_observations")
     parser.add_argument("--adjusted-close-column", default="adjusted_close")
+    parser.add_argument("--macro-csv", help="Local CSV with series_name,date,value rows for T10Y2Y/T10YIE/BAMLH0A0HYM2")
+    parser.add_argument("--macro-source-db", help="Local SQLite macro database containing macro_observations")
+    parser.add_argument("--vix-csv", help="Local CSV with date and value/close/adjusted_close columns for VIX")
     return parser
 
 
@@ -40,11 +43,15 @@ def main(argv: list[str] | None = None) -> int:
         ),
         source_registry_database=args.source_registry_db,
         registry_schema_file=args.registry_schema_file,
+        macro_csv=args.macro_csv,
+        macro_source_database=args.macro_source_db,
+        vix_csv=args.vix_csv,
     )
     print(f"output={result.output_path}")
     print(f"price_rows={result.price_rows}")
     print(f"metric_rows={result.metric_rows}")
     print(f"macro_rows={result.macro_rows}")
+    print(f"vix_rows={result.vix_rows}")
     if result.registry_tables:
         print(f"registry_tables={','.join(result.registry_tables)}")
     for warning in result.warnings:

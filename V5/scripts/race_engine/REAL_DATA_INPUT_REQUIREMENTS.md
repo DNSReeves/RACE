@@ -50,6 +50,45 @@ CREATE TABLE IF NOT EXISTS prices (
 
 `macro_observations` must include `series_name`, `date`, and `value`.
 
+## VIX And Macro Population
+
+The standalone RACE pipeline requires VIX as a price-like series in `prices`, plus these macro series in `macro_observations`:
+
+- `T10Y2Y`
+- `T10YIE`
+- `BAMLH0A0HYM2`
+
+If VIX is not present in the generic market database, provide a local VIX CSV:
+
+```powershell
+python scripts\build_race_market_cache.py --source-db generic.sqlite --vix-csv vix.csv
+```
+
+The VIX CSV must include `date` and one of `adjusted_close`, `close`, or `value`. Optional columns are `open`, `high`, `low`, and `volume`.
+
+Macro observations can be loaded from a local CSV:
+
+```powershell
+python scripts\build_race_market_cache.py --source-db generic.sqlite --macro-csv macro.csv
+```
+
+The macro CSV must contain:
+
+```text
+series_name,date,value
+T10Y2Y,2026-01-01,0.50
+T10YIE,2026-01-01,2.10
+BAMLH0A0HYM2,2026-01-01,300
+```
+
+Macro observations can also be loaded from a local SQLite source:
+
+```powershell
+python scripts\build_race_market_cache.py --source-db generic.sqlite --macro-source-db macro.sqlite
+```
+
+The macro SQLite source must contain a `macro_observations` table with `series_name`, `date`, and `value`.
+
 ## Required Series
 
 Price history is required for the baseline RACE universe and Tier 1 price series:

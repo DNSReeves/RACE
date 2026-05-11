@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,6 +78,7 @@ class CacheBuildResult:
     macro_rows: int
     warnings: tuple[str, ...]
     registry_tables: tuple[str, ...] = ()
+    vix_rows: int = 0
 
 
 def build_race_market_cache(
@@ -85,6 +87,9 @@ def build_race_market_cache(
     mapping: SourceMapping | None = None,
     source_registry_database: str | Path | None = None,
     registry_schema_file: str | Path | None = None,
+    macro_csv: str | Path | None = None,
+    macro_source_database: str | Path | None = None,
+    vix_csv: str | Path | None = None,
 ) -> CacheBuildResult:
     """Translate a generic local ETF database into the RACE cache schema.
 
@@ -114,9 +119,16 @@ def build_race_market_cache(
         price_rows = _copy_prices(source, target, config, tickers)
         metric_rows = _copy_metrics(registry_source, target, config, tickers, warnings)
         macro_rows = _copy_macro(source, target, config, warnings)
+        if macro_source_database:
+            with _connect_read_only(Path(macro_source_database)) as macro_source:
+                macro_rows += _copy_macro(macro_source, target, config, warnings)
+        if macro_csv:
+            macro_rows += _copy_macro_csv(Path(macro_csv), target)
+        vix_rows = _copy_vix_csv(Path(vix_csv), target) if vix_csv else 0
+        price_rows += vix_rows
         target.commit()
 
-    return CacheBuildResult(output_path, price_rows, metric_rows, macro_rows, tuple(warnings), registry_tables)
+    return CacheBuildResult(output_path, price_rows, metric_rows, macro_rows, tuple(warnings), registry_tables, vix_rows)
 
 
 def required_price_tickers() -> tuple[str, ...]:
@@ -377,6 +389,78 @@ def _copy_macro(
         )
         rows_written += 1
     return rows_written
+
+
+def _copy_macro_csv(path: Path, target: sqlite3.Connection) -> int:
+    rows_written = 0
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        required = {"series_name", "date", "value"}
+        if not reader.fieldnames or not required.issubset(set(reader.fieldnames)):
+            raise ValueError("macro CSV must include series_name,date,value columns")
+        for row in reader:
+            series_name = (row.get("series_name") or "").strip()
+            if series_name not in {"T10Y2Y", "T10YIE", "BAMLH0A0HYM2"}:
+                continue
+            target.execute(
+                """
+                insert or replace into macro_observations
+                (series_name, date, value)
+                values (?, ?, ?)
+                """,
+                (series_name, row["date"], float(row["value"])),
+            )
+            rows_written += 1
+    return rows_written
+
+
+def _copy_vix_csv(path: Path, target: sqlite3.Connection) -> int:
+    rows_written = 0
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if not reader.fieldnames or "date" not in reader.fieldnames:
+            raise ValueError("VIX CSV must include a date column")
+        for row in reader:
+            value = _first_present(row, ("adjusted_close", "close", "value"))
+            if value is None:
+                raise ValueError("VIX CSV must include adjusted_close, close, or value")
+            adjusted_close = float(value)
+            open_value = _optional_float(row, "open")
+            high_value = _optional_float(row, "high")
+            low_value = _optional_float(row, "low")
+            close_value = _optional_float(row, "close")
+            volume_value = _optional_float(row, "volume")
+            target.execute(
+                """
+                insert or replace into prices
+                (ticker, date, open, high, low, close, adjusted_close, volume)
+                values ('VIX', ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["date"],
+                    adjusted_close if open_value is None else open_value,
+                    adjusted_close if high_value is None else high_value,
+                    adjusted_close if low_value is None else low_value,
+                    adjusted_close if close_value is None else close_value,
+                    adjusted_close,
+                    volume_value,
+                ),
+            )
+            rows_written += 1
+    return rows_written
+
+
+def _first_present(row: dict[str, str], columns: tuple[str, ...]) -> str | None:
+    for column in columns:
+        value = row.get(column)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _optional_float(row: dict[str, str], column: str) -> float | None:
+    value = row.get(column)
+    return None if value in (None, "") else float(value)
 
 
 def _has_table(connection: sqlite3.Connection, table: str) -> bool:

@@ -86,6 +86,52 @@ def test_cache_builder_uses_registry_db_and_authoritative_schema_file(tmp_path) 
     assert row == ("2026-01-03 12:00:00", 200_000_000.0, 0.09, None)
 
 
+def test_cache_builder_loads_macro_csv_and_vix_csv(tmp_path) -> None:
+    source = tmp_path / "generic.sqlite"
+    output = tmp_path / "race_market_cache.sqlite"
+    macro_csv = tmp_path / "macro.csv"
+    vix_csv = tmp_path / "vix.csv"
+    _create_source_without_macro_or_vix(source)
+    macro_csv.write_text(
+        "series_name,date,value\n"
+        "T10Y2Y,2026-01-01,0.5\n"
+        "T10YIE,2026-01-01,2.1\n"
+        "BAMLH0A0HYM2,2026-01-01,300\n"
+        "IGNORED,2026-01-01,1\n",
+        encoding="utf-8",
+    )
+    vix_csv.write_text(
+        "date,value\n2026-01-01,14.5\n2026-01-02,15.0\n",
+        encoding="utf-8",
+    )
+
+    result = build_race_market_cache(source, output, macro_csv=macro_csv, vix_csv=vix_csv)
+
+    assert result.vix_rows == 2
+    assert result.macro_rows == 3
+    with sqlite3.connect(output) as connection:
+        assert connection.execute("select adjusted_close from prices where ticker = 'VIX' and date = '2026-01-01'").fetchone()[0] == 14.5
+        assert connection.execute("select count(*) from macro_observations").fetchone()[0] == 3
+
+
+def test_cache_builder_loads_macro_sqlite_source(tmp_path) -> None:
+    source = tmp_path / "generic.sqlite"
+    macro_source = tmp_path / "macro.sqlite"
+    output = tmp_path / "race_market_cache.sqlite"
+    _create_source_without_macro_or_vix(source)
+    with sqlite3.connect(macro_source) as connection:
+        connection.execute("create table macro_observations (series_name text, date text, value real)")
+        connection.execute("insert into macro_observations values ('T10Y2Y', '2026-01-01', 0.5)")
+        connection.execute("insert into macro_observations values ('T10YIE', '2026-01-01', 2.1)")
+        connection.execute("insert into macro_observations values ('BAMLH0A0HYM2', '2026-01-01', 300)")
+
+    result = build_race_market_cache(source, output, macro_source_database=macro_source)
+
+    assert result.macro_rows == 3
+    with sqlite3.connect(output) as connection:
+        assert connection.execute("select value from macro_observations where series_name = 'BAMLH0A0HYM2'").fetchone()[0] == 300
+
+
 def _create_source_db(path):
     tickers = required_price_tickers()
     start = date(2026, 1, 1)
@@ -164,6 +210,29 @@ def _create_registry_db(path):
             connection.execute(
                 "insert into etf_metrics (ticker, name, aum, expense_ratio, last_updated) values (?, ?, ?, ?, ?)",
                 (ticker, ticker, 200_000_000.0, 0.09, "2026-01-03 12:00:00"),
+            )
+
+
+def _create_source_without_macro_or_vix(path):
+    tickers = tuple(ticker for ticker in required_price_tickers() if ticker != "VIX")
+    start = date(2026, 1, 1)
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "create table prices (ticker text, date text, open real, high real, low real, close real, adjusted_close real, volume real)"
+        )
+        connection.execute(
+            "create table etf_metrics (ticker text, as_of text, aum real, expense_ratio real, bid_ask_spread real)"
+        )
+        for ticker in tickers:
+            for offset in range(3):
+                value = 100 + offset
+                connection.execute(
+                    "insert into prices values (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (ticker, (start + timedelta(days=offset)).isoformat(), value, value, value, value, value, 1000),
+                )
+            connection.execute(
+                "insert into etf_metrics values (?, ?, ?, ?, ?)",
+                (ticker, start.isoformat(), 100_000_000, 0.1, 0.01),
             )
 
 
