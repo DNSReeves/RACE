@@ -2,7 +2,7 @@ import json
 import sqlite3
 from datetime import date, timedelta
 
-from race_engine.execution.cli import main
+from race_engine.execution.cli import main, _read_positions
 from race_engine.allocation.sleeves import BASELINE_UNIVERSE
 from race_engine.data.macro_loader import REQUIRED_TIER1_SERIES
 
@@ -10,6 +10,22 @@ from race_engine.data.macro_loader import REQUIRED_TIER1_SERIES
 def test_cli_exits_safely_when_flag_omitted(tmp_path) -> None:
     assert main(["--race-output-folder", str(tmp_path)]) == 0
     assert not (tmp_path / "race_order_list.json").exists()
+
+
+def test_read_positions_supports_brokerage_export_with_title_row(tmp_path) -> None:
+    positions = tmp_path / "positions.csv"
+    positions.write_text(
+        '"Positions for account DNSR-IRA ...985 as of 05:27 PM ET, 2026/05/11"\n\n'
+        '"Symbol","Description","Qty (Quantity)","% of Acct (% of Account)","Asset Type",\n'
+        '"DBMF","Managed Futures","1,014","6.83%","ETFs & Closed End Funds",\n'
+        '"CASH","Cash","--","--","Cash",\n'
+        '"BND","Bond ETF","200","3.18%","ETFs & Closed End Funds",\n',
+        encoding="utf-8",
+    )
+
+    parsed = _read_positions(positions)
+
+    assert parsed == {"DBMF": 6.83, "BND": 3.18}
 
 
 def test_missing_data_returns_diagnostic_only(tmp_path) -> None:

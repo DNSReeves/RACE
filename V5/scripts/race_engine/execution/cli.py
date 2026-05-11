@@ -47,12 +47,58 @@ def main(argv: list[str] | None = None) -> int:
 
 def _read_positions(path: Path) -> dict[str, float]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        return {
-            row["ticker"]: float(row.get("current_weight", 0.0))
-            for row in reader
-            if row.get("ticker")
-        }
+        rows = list(csv.reader(handle))
+    header_index = _find_position_header(rows)
+    if header_index is None:
+        raise ValueError(f"could not find positions header in {path}")
+    header = rows[header_index]
+    positions: dict[str, float] = {}
+    for values in rows[header_index + 1 :]:
+        row = dict(zip(header, values))
+        ticker = _first_present(row, ("ticker", "Ticker", "symbol", "Symbol"))
+        weight = _first_present(
+            row,
+            (
+                "current_weight",
+                "Current Weight",
+                "% of Acct (% of Account)",
+                "% of Account",
+                "Percent of Account",
+            ),
+        )
+        if ticker and weight:
+            parsed_weight = _parse_weight(weight)
+            if parsed_weight is not None:
+                positions[ticker.strip().upper()] = parsed_weight
+    return positions
+
+
+def _find_position_header(rows: list[list[str]]) -> int | None:
+    for index, row in enumerate(rows):
+        normalized = {cell.strip().lower() for cell in row}
+        if {"ticker", "current_weight"}.issubset(normalized):
+            return index
+        if "symbol" in normalized and any("% of acct" in cell.strip().lower() for cell in row):
+            return index
+    return None
+
+
+def _first_present(row: dict[str, str], names: tuple[str, ...]) -> str | None:
+    for name in names:
+        value = row.get(name)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _parse_weight(value: str) -> float | None:
+    text = value.strip().replace("%", "").replace(",", "")
+    if text in {"", "--", "N/A"}:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
 
 
 if __name__ == "__main__":

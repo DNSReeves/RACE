@@ -23,7 +23,7 @@ set "ORDER_JSON=%OUT_DIR%\race_order_list.json"
 set "ORDER_HTML=%OUT_DIR%\race_order_report.html"
 
 rem Optional: set this to a CSV with columns ticker,current_weight.
-set "CURRENT_POSITIONS_CSV="
+set "CURRENT_POSITIONS_CSV=C:\Users\david\Development\Python\RACE\V5\scripts\DNSR-IRA-Positions-2026-05-11-172715.csv"
 
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
@@ -38,7 +38,13 @@ if exist "%FMP_KEY_FILE%" (
     --fred-api-key-file "%FRED_KEY_FILE%" ^
     --eodhd-api-key-file "%EODHD_KEY_FILE%"
 )
-if errorlevel 1 goto fail
+if errorlevel 1 (
+  if exist "%MACRO_CSV%" if exist "%VIX_CSV%" (
+    echo WARN: Macro/VIX refresh failed; reusing existing CSV files.
+  ) else (
+    goto fail
+  )
+)
 
 echo [2/4] Building RACE market cache...
 python scripts\build_race_market_cache.py ^
@@ -80,4 +86,3 @@ exit /b 0
 echo.
 echo RACE periodic report failed. Review the error above.
 exit /b 1
-
