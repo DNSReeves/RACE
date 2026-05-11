@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import pytest
 
 from race_engine.data.cache_builder import build_race_market_cache, required_price_tickers
-from race_engine.data.macro_cache_loader import prepare_race_macro_inputs
+from race_engine.data.macro_cache_loader import prepare_race_macro_inputs, write_fred_macro_csv
 
 
 def test_prepare_race_macro_inputs_writes_fred_and_eodhd_csvs(tmp_path, monkeypatch) -> None:
@@ -78,6 +78,28 @@ def test_generated_csvs_feed_cache_builder(tmp_path, monkeypatch) -> None:
         assert connection.execute("select adjusted_close from prices where ticker = 'VIX' order by date limit 1").fetchone()[0] == 14.5
 
 
+def test_fred_csv_blank_and_non_numeric_values_are_skipped(tmp_path) -> None:
+    output = tmp_path / "race_macro.csv"
+
+    rows = write_fred_macro_csv(output, "2026-01-01", url_reader=_fake_reader_with_bad_fred_csv_values)
+
+    assert rows == 3
+    with output.open("r", encoding="utf-8") as handle:
+        parsed = list(csv.DictReader(handle))
+    assert [row["value"] for row in parsed] == ["0.5", "2.1", "300.0"]
+
+
+def test_fred_json_blank_and_non_numeric_values_are_skipped(tmp_path) -> None:
+    output = tmp_path / "race_macro.csv"
+
+    rows = write_fred_macro_csv(output, "2026-01-01", fred_api_key="local-fred-key", url_reader=_fake_reader_with_bad_fred_json_values)
+
+    assert rows == 3
+    with output.open("r", encoding="utf-8") as handle:
+        parsed = list(csv.DictReader(handle))
+    assert [row["value"] for row in parsed] == ["1.0", "1.0", "1.0"]
+
+
 def _fake_reader(url: str) -> bytes:
     if "fred/series/observations" in url:
         return json.dumps(
@@ -113,6 +135,30 @@ def _fake_reader(url: str) -> bytes:
     raise AssertionError(f"unexpected URL: {url}")
 
 
+def _fake_reader_with_bad_fred_csv_values(url: str) -> bytes:
+    if "T10Y2Y" in url:
+        return b"observation_date,T10Y2Y\n2026-01-01,\n2026-01-02,.\n2026-01-03,0.5\n"
+    if "T10YIE" in url:
+        return b"observation_date,T10YIE\n2026-01-01,NaN\n2026-01-02,nan\n2026-01-03,2.1\n"
+    return b"observation_date,BAMLH0A0HYM2\n2026-01-01,None\n2026-01-02,not-a-number\n2026-01-03,300\n"
+
+
+def _fake_reader_with_bad_fred_json_values(url: str) -> bytes:
+    return json.dumps(
+        {
+            "observations": [
+                {"date": "2026-01-01", "value": ""},
+                {"date": "2026-01-02", "value": "."},
+                {"date": "2026-01-03", "value": "NaN"},
+                {"date": "2026-01-04", "value": "nan"},
+                {"date": "2026-01-05", "value": "None"},
+                {"date": "2026-01-06", "value": "not-a-number"},
+                {"date": "2026-01-07", "value": "1.0"},
+            ]
+        }
+    ).encode("utf-8")
+
+
 def _create_source_without_macro_or_vix(path):
     tickers = tuple(ticker for ticker in required_price_tickers() if ticker != "VIX")
     start = date(2026, 1, 1)
@@ -134,4 +180,3 @@ def _create_source_without_macro_or_vix(path):
                 "insert into etf_metrics values (?, ?, ?, ?, ?)",
                 (ticker, start.isoformat(), 100_000_000, 0.1, 0.01),
             )
-

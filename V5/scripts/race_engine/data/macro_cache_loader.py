@@ -122,20 +122,34 @@ def _fetch_fred_series(
         )
         payload = json.loads(reader(f"https://api.stlouisfed.org/fred/series/observations?{query}").decode("utf-8"))
         observations = payload.get("observations", [])
-        return tuple(
-            (item["date"], float(item["value"]))
-            for item in observations
-            if item.get("value") not in {None, "."}
-        )
+        rows = []
+        for item in observations:
+            value = _parse_fred_value(item.get("value"))
+            if value is not None:
+                rows.append((item["date"], value))
+        return tuple(rows)
     csv_payload = reader(
         f"https://fred.stlouisfed.org/graph/fredgraph.csv?{urlencode({'id': series_name, 'observation_start': start_date})}"
     ).decode("utf-8")
     parsed = csv.DictReader(csv_payload.splitlines())
-    return tuple(
-        (row["observation_date"], float(row[series_name]))
-        for row in parsed
-        if row.get(series_name) not in {None, "."}
-    )
+    rows = []
+    for row in parsed:
+        value = _parse_fred_value(row.get(series_name))
+        if value is not None:
+            rows.append((row["observation_date"], value))
+    return tuple(rows)
+
+
+def _parse_fred_value(value: object) -> float | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text in {"", ".", "NaN", "nan", "None"}:
+        return None
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return None
 
 
 def _fetch_vix_eodhd(start_date: str, api_key: str, reader: UrlReader) -> tuple[tuple[str, float], ...]:
@@ -171,4 +185,3 @@ def _read_key(env_name: str, key_file: str | Path | None) -> str | None:
 def _read_url(url: str) -> bytes:
     with urlopen(url, timeout=30) as response:
         return response.read()
-
