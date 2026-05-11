@@ -58,6 +58,29 @@ The standalone RACE pipeline requires VIX as a price-like series in `prices`, pl
 - `T10YIE`
 - `BAMLH0A0HYM2`
 
+Create local CSV inputs with:
+
+```powershell
+python scripts\load_race_macro_cache.py
+```
+
+Default outputs:
+
+```text
+race_engine_out\race_macro.csv
+race_engine_out\vix.csv
+```
+
+The utility uses FRED for `T10Y2Y`, `T10YIE`, and `BAMLH0A0HYM2`. It uses EODHD first for VIX when `EODHD_API_KEY` or `--eodhd-api-key-file` is available, then FMP when `FMP_API_KEY` or `--fmp-api-key-file` is available. API keys are never hardcoded and should remain in environment variables or local key files outside source control.
+
+Then build the RACE market cache with:
+
+```powershell
+python scripts\build_race_market_cache.py --source-db generic.sqlite --macro-csv race_engine_out\race_macro.csv --vix-csv race_engine_out\vix.csv
+```
+
+Never commit generated CSV files or API key files.
+
 If VIX is not present in the generic market database, provide a local VIX CSV:
 
 ```powershell
