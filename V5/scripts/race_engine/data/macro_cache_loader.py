@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlencode, quote
 from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
 
 
 FRED_SERIES: tuple[str, ...] = ("T10Y2Y", "T10YIE", "BAMLH0A0HYM2")
@@ -89,8 +90,14 @@ def write_vix_csv(
 ) -> tuple[int, str]:
     reader = url_reader or _read_url
     if eodhd_api_key:
-        rows = _fetch_vix_eodhd(start_date, eodhd_api_key, reader)
-        source = "EODHD"
+        try:
+            rows = _fetch_vix_eodhd(start_date, eodhd_api_key, reader)
+            source = "EODHD"
+        except ValueError:
+            if not fmp_api_key:
+                raise
+            rows = _fetch_vix_fmp(start_date, fmp_api_key, reader)
+            source = "FMP"
     elif fmp_api_key:
         rows = _fetch_vix_fmp(start_date, fmp_api_key, reader)
         source = "FMP"
@@ -154,12 +161,21 @@ def _parse_fred_value(value: object) -> float | None:
 
 def _fetch_vix_eodhd(start_date: str, api_key: str, reader: UrlReader) -> tuple[tuple[str, float], ...]:
     query = urlencode({"api_token": api_key, "fmt": "json", "period": "d", "from": start_date})
-    payload = json.loads(reader(f"https://eodhd.com/api/eod/{quote('^VIX.IND')}?{query}").decode("utf-8"))
-    return tuple(
-        (item["date"], float(item.get("adjusted_close") or item.get("close")))
-        for item in payload
-        if item.get("date") and (item.get("adjusted_close") is not None or item.get("close") is not None)
-    )
+    errors = []
+    for symbol in ("VIX.INDX", "VIX.IND", "^VIX.IND"):
+        try:
+            payload = json.loads(reader(f"https://eodhd.com/api/eod/{quote(symbol, safe='')}?{query}").decode("utf-8"))
+            rows = tuple(
+                (item["date"], float(item.get("adjusted_close") or item.get("close")))
+                for item in payload
+                if item.get("date") and (item.get("adjusted_close") is not None or item.get("close") is not None)
+            )
+            if rows:
+                return rows
+            errors.append(f"{symbol}: no rows")
+        except (HTTPError, URLError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            errors.append(f"{symbol}: {exc.__class__.__name__}")
+    raise ValueError(f"EODHD returned no usable VIX rows ({'; '.join(errors)})")
 
 
 def _fetch_vix_fmp(start_date: str, api_key: str, reader: UrlReader) -> tuple[tuple[str, float], ...]:

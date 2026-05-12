@@ -23,11 +23,15 @@ portfolio_summary.html
 out.dir/
 logs/
 *.log
+V5/scripts/*-Positions-*.csv
 
 # Local environment/secrets
 .env
 .venv/
 MyPythonVirtualEnv/
+V5/scripts/api_keys/
+V5/scripts/*_api_key.txt
+V5/scripts/**/*_api_key.txt
 
 V5/scripts/race_engine_out/
 race_engine_out/

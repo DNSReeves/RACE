@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -36,12 +36,12 @@ class ReadOnlySQLiteAdapter:
             PriceBar(
                 ticker=row["ticker"],
                 date=date.fromisoformat(row["date"]),
-                open=float(row["open"]),
-                high=float(row["high"]),
-                low=float(row["low"]),
-                close=float(row["close"]),
+                open=_float_or(row["open"], row["adjusted_close"]),
+                high=_float_or(row["high"], row["adjusted_close"]),
+                low=_float_or(row["low"], row["adjusted_close"]),
+                close=_float_or(row["close"], row["adjusted_close"]),
                 adjusted_close=float(row["adjusted_close"]),
-                volume=float(row["volume"]),
+                volume=_float_or(row["volume"], 0.0),
             )
             for row in rows
         )
@@ -57,7 +57,7 @@ class ReadOnlySQLiteAdapter:
         row = rows[0]
         return ETFMetrics(
             ticker=row["ticker"],
-            as_of=date.fromisoformat(row["as_of"]),
+            as_of=_parse_date(row["as_of"]),
             aum=None if row["aum"] is None else float(row["aum"]),
             expense_ratio=None if row["expense_ratio"] is None else float(row["expense_ratio"]),
             bid_ask_spread=None if row["bid_ask_spread"] is None else float(row["bid_ask_spread"]),
@@ -80,3 +80,13 @@ class RaceMarketDataAdapter:
     def get_metrics(self, ticker: str) -> ETFMetrics | None:
         return self.reader.fetch_latest_metrics(ticker)
 
+
+def _float_or(value: object, fallback: object) -> float:
+    return float(fallback if value is None else value)
+
+
+def _parse_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return datetime.fromisoformat(value).date()

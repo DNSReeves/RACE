@@ -100,3 +100,38 @@ def test_market_adapter_reads_sqlite_in_read_only_mode(tmp_path) -> None:
     assert metrics is not None
     assert metrics.aum == 100000000
 
+
+def test_market_adapter_defaults_nullable_price_fields(tmp_path) -> None:
+    db_path = tmp_path / "market.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "create table prices (ticker text, date text, open real, high real, low real, close real, adjusted_close real, volume real)"
+        )
+        connection.execute(
+            "insert into prices values ('VIX', '2026-05-08', null, null, null, null, 15.5, null)"
+        )
+
+    bars = RaceMarketDataAdapter(db_path).get_ohlcv("VIX")
+
+    assert bars[0].open == 15.5
+    assert bars[0].high == 15.5
+    assert bars[0].low == 15.5
+    assert bars[0].close == 15.5
+    assert bars[0].volume == 0.0
+
+
+def test_market_adapter_accepts_timestamp_metric_as_of(tmp_path) -> None:
+    db_path = tmp_path / "market.sqlite"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "create table etf_metrics (ticker text, as_of text, aum real, expense_ratio real, bid_ask_spread real)"
+        )
+        connection.execute(
+            "insert into etf_metrics values ('SPY', '2025-09-18T09:16:20.507644', 100000000, 0.09, null)"
+        )
+
+    metrics = RaceMarketDataAdapter(db_path).get_metrics("SPY")
+
+    assert metrics is not None
+    assert metrics.as_of.isoformat() == "2025-09-18"
+    assert metrics.bid_ask_spread is None

@@ -116,6 +116,8 @@ def build_race_market_cache(
     ):
         _create_target_schema(target)
         tickers = required_price_tickers()
+        if not _has_table(source, config.price_table) and _has_table(source, "daily_prices"):
+            config = _mapping_with_price_table(config, "daily_prices")
         price_rows = _copy_prices(source, target, config, tickers)
         metric_rows = _copy_metrics(registry_source, target, config, tickers, warnings)
         macro_rows = _copy_macro(source, target, config, warnings)
@@ -323,6 +325,30 @@ def _mapping_for_registry_schema(mapping: SourceMapping, schema: dict[str, tuple
         metrics_aum=mapping.metrics_aum,
         metrics_expense_ratio=mapping.metrics_expense_ratio,
         metrics_bid_ask_spread=bid_ask_spread,
+        macro_table=mapping.macro_table,
+        macro_series=mapping.macro_series,
+        macro_date=mapping.macro_date,
+        macro_value=mapping.macro_value,
+    )
+
+
+def _mapping_with_price_table(mapping: SourceMapping, price_table: str) -> SourceMapping:
+    return SourceMapping(
+        price_table=price_table,
+        price_ticker=mapping.price_ticker,
+        price_date=mapping.price_date,
+        price_open=mapping.price_open,
+        price_high=mapping.price_high,
+        price_low=mapping.price_low,
+        price_close=mapping.price_close,
+        price_adjusted_close=mapping.price_adjusted_close,
+        price_volume=mapping.price_volume,
+        metrics_table=mapping.metrics_table,
+        metrics_ticker=mapping.metrics_ticker,
+        metrics_as_of=mapping.metrics_as_of,
+        metrics_aum=mapping.metrics_aum,
+        metrics_expense_ratio=mapping.metrics_expense_ratio,
+        metrics_bid_ask_spread=mapping.metrics_bid_ask_spread,
         macro_table=mapping.macro_table,
         macro_series=mapping.macro_series,
         macro_date=mapping.macro_date,
