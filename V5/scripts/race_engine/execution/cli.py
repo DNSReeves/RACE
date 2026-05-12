@@ -17,6 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--race-current-positions-csv")
     parser.add_argument("--race-output-folder", default="race_engine_out")
     parser.add_argument("--race-validation-status", choices=("PASS", "WARN", "FAIL"), default="FAIL")
+    parser.add_argument("--race-validation-message", action="append", default=[])
     parser.add_argument("--race-allow-warn-dry-run", action="store_true")
     parser.add_argument("--race-write-atsh-handoff", action="store_true")
     return parser
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
         validation_status=args.race_validation_status,
         allow_warn_dry_run=args.race_allow_warn_dry_run,
     )
+    artifact.setdefault("validation_messages", []).extend(args.race_validation_message)
     (output_folder / "race_order_list.json").write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
     if args.race_write_atsh_handoff:
         from race_engine.reporting.ats_handoff import race_dry_run_panel

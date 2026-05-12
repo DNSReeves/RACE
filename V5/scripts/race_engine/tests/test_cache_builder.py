@@ -60,6 +60,27 @@ def test_cache_builder_reports_missing_optional_tables(tmp_path) -> None:
     assert "macro table not found: macro_observations" in result.warnings
 
 
+def test_cache_builder_auto_detects_daily_prices_table(tmp_path) -> None:
+    source = tmp_path / "generic.sqlite"
+    output = tmp_path / "race_market_cache.sqlite"
+    start = date(2026, 1, 1)
+    with sqlite3.connect(source) as connection:
+        connection.execute(
+            "create table daily_prices (ticker text, date text, open real, high real, low real, close real, adjusted_close real, volume integer)"
+        )
+        for ticker in required_price_tickers():
+            connection.execute(
+                "insert into daily_prices values (?, ?, ?, ?, ?, ?, ?, ?)",
+                (ticker, start.isoformat(), 100, 101, 99, 100, 100, 1000),
+            )
+
+    result = build_race_market_cache(source, output)
+
+    assert result.price_rows == len(required_price_tickers())
+    with sqlite3.connect(output) as connection:
+        assert connection.execute("select adjusted_close from prices where ticker = 'SPY'").fetchone()[0] == 100
+
+
 def test_cache_builder_uses_registry_db_and_authoritative_schema_file(tmp_path) -> None:
     source = tmp_path / "generic_market.sqlite"
     registry = tmp_path / "registry.sqlite"

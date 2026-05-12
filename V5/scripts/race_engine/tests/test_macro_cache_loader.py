@@ -2,6 +2,7 @@ import csv
 import json
 import sqlite3
 from datetime import date, timedelta
+from urllib.error import HTTPError
 
 import pytest
 
@@ -43,6 +44,19 @@ def test_prepare_race_macro_inputs_uses_fmp_fallback(tmp_path, monkeypatch) -> N
     with result.vix_csv.open("r", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[1] == {"date": "2026-01-02", "value": "15.0"}
+
+
+def test_prepare_race_macro_inputs_falls_back_to_fmp_when_eodhd_404s(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("EODHD_API_KEY", "local-eodhd-key")
+    monkeypatch.setenv("FMP_API_KEY", "local-fmp-key")
+
+    result = prepare_race_macro_inputs(
+        output_dir=tmp_path,
+        min_vix_rows=2,
+        url_reader=_fake_reader_eodhd_404_fmp_ok,
+    )
+
+    assert result.vix_source == "FMP"
 
 
 def test_prepare_race_macro_inputs_requires_vix_key(tmp_path, monkeypatch) -> None:
@@ -133,6 +147,12 @@ def _fake_reader(url: str) -> bytes:
             }
         ).encode("utf-8")
     raise AssertionError(f"unexpected URL: {url}")
+
+
+def _fake_reader_eodhd_404_fmp_ok(url: str) -> bytes:
+    if "eodhd.com" in url:
+        raise HTTPError(url, 404, "Not Found", hdrs=None, fp=None)
+    return _fake_reader(url)
 
 
 def _fake_reader_with_bad_fred_csv_values(url: str) -> bytes:
