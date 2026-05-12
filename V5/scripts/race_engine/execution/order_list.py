@@ -16,6 +16,8 @@ class OrderListItem:
     reason_code: str
     priority: str
     trade_quality_status: str
+    entry_quality_status: str
+    entry_quality_reasons: tuple[str, ...]
     audit_event_ids: tuple[str, ...]
 
 
@@ -28,6 +30,8 @@ def proposed_order(
     reason_code: str,
     priority: str,
     trade_quality_status: str,
+    entry_quality_status: str = "EXECUTE",
+    entry_quality_reasons: tuple[str, ...] = (),
     audit_event_ids: tuple[str, ...] = (),
 ) -> OrderListItem:
     dollar_change = portfolio_value * (target_weight - current_weight) / 100.0
@@ -43,6 +47,7 @@ def proposed_order(
         reason_code=reason_code,
         priority=priority,
         trade_quality_status=trade_quality_status,
+        entry_quality_status=entry_quality_status,
+        entry_quality_reasons=entry_quality_reasons,
         audit_event_ids=audit_event_ids,
     )
-
