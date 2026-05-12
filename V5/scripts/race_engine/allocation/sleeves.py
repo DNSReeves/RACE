@@ -40,6 +40,7 @@ BASELINE_UNIVERSE: tuple[UniverseEntry, ...] = (
     UniverseEntry("HYG", "fixed_income", date(2007, 4, 4), date(2026, 1, 1), "High-yield credit"),
     UniverseEntry("GLD", "real_assets", date(2004, 11, 18), date(2026, 1, 1), "Gold"),
     UniverseEntry("DBC", "real_assets", date(2006, 2, 3), date(2026, 1, 1), "Broad commodities"),
+    UniverseEntry("BCI", "real_assets", date(2017, 3, 30), date(2026, 1, 1), "Broad commodities candidate from original RACE article"),
     UniverseEntry("PDBC", "real_assets", date(2014, 11, 7), date(2026, 1, 1), "Broad commodities"),
     UniverseEntry("VNQ", "real_assets", date(2004, 9, 23), date(2026, 1, 1), "Listed real estate"),
     UniverseEntry("DBMF", "crisis_alpha", date(2019, 5, 8), date(2026, 1, 1), "Managed futures"),
@@ -60,4 +61,3 @@ SISTER_SLEEVES: dict[str, tuple[str, ...]] = {
     "us_equity_core": ("cash",),
     "cash": (),
 }
-
