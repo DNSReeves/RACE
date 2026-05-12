@@ -11,6 +11,14 @@ def test_every_baseline_etf_maps_to_exactly_one_sleeve() -> None:
     assert len(tickers) == len(set(tickers))
     assert sleeve_for_ticker("TIP") == "fixed_income"
     assert sleeve_for_ticker("VTIP") == "fixed_income"
+    assert sleeve_for_ticker("BCI") == "real_assets"
+
+
+def test_bci_is_real_assets_candidate_not_forced_selection() -> None:
+    entries = {entry.ticker: entry for entry in baseline_universe()}
+
+    assert entries["BCI"].sleeve == "real_assets"
+    assert "original RACE article" in entries["BCI"].rationale
 
 
 def test_etf_not_selectable_before_252_days_of_history() -> None:
@@ -40,4 +48,3 @@ def test_cash_pre_bil_uses_proxy() -> None:
 
     assert substitution is not None
     assert substitution.replacements == (("DGS3MO", 1.0),)
-

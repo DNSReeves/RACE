@@ -119,6 +119,8 @@ Price history is required for the baseline RACE universe and Tier 1 price series
 - `SPY`, `QQQ`, `VIX`, `IEF`, `HYG`, `LQD`, `DBC`, `GLD`
 - All ETFs listed in `race_engine/allocation/sleeves.py`
 
+`BCI` is included in the `real_assets` sleeve as a commodities candidate because the original RACE article used it as a commodities sleeve candidate. It is not forced into the portfolio; existing risk gates, ranking, liquidity checks, and construction rules decide whether it is selected.
+
 Macro observations are required for:
 
 - `T10Y2Y`
