@@ -23,6 +23,8 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
                 "estimated_shares": 82,
                 "priority": "SLEEVE_DRIFT",
                 "trade_quality_status": "EXECUTE",
+                "entry_quality_status": "STAGE_ENTRY",
+                "entry_quality_reasons": ["rsi14_gt_72", "close_gt_20dma_plus_2std"],
             }
         ],
         "gate_failures": {"SPY": {"gate2": ["rsi14_gt_72"]}},
@@ -36,6 +38,10 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert "Sleeve Targets" in html
     assert "Dry-Run Orders" in html
     assert "VTI" in html
+    assert "Trade Quality" in html
+    assert "Entry Quality" in html
+    assert "STAGE_ENTRY" in html
+    assert "rsi14_gt_72" in html
     assert "broker" in html
 
 
@@ -51,4 +57,3 @@ def test_write_order_html_report(tmp_path) -> None:
 
     assert result == output_html
     assert "Diagnostic Only" in output_html.read_text(encoding="utf-8")
-

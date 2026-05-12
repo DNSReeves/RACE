@@ -149,6 +149,7 @@ def _compute_pipeline(
     ranked = tuple(RankedETF(score.ticker, score.sleeve, score.score) for score in scores)
     selected = select_top_ranked(ranked)
     selected_etfs = {sleeve: [item.ticker for item in items] for sleeve, items in selected.items()}
+    gate_report_by_ticker = {report.ticker: report for report in gate_reports}
     target_positions = construct_position_weights(blended.targets, selected) if selected else {}
     returns_by_ticker = {
         ticker: _returns(tuple(bar.adjusted_close for bar in adapter.get_ohlcv(ticker)))[-63:]
@@ -183,6 +184,11 @@ def _compute_pipeline(
                 ),
             )
             if quality.status == "EXECUTE":
+                entry_quality_status, entry_quality_reasons = _entry_quality_for_order(
+                    target - current,
+                    gate_report_by_ticker.get(ticker).gate2_reasons if ticker in gate_report_by_ticker else (),
+                    quality.status,
+                )
                 orders.append(
                     asdict(
                         proposed_order(
@@ -194,6 +200,8 @@ def _compute_pipeline(
                             reason_code=trigger.reason,
                             priority=trigger.priority.name,
                             trade_quality_status=quality.status,
+                            entry_quality_status=entry_quality_status,
+                            entry_quality_reasons=entry_quality_reasons,
                         )
                     )
                 )
@@ -216,6 +224,23 @@ def _load_config_path(config_path: str | None) -> RaceConfig:
     with Path(config_path).open("r", encoding="utf-8") as handle:
         overrides = json.load(handle)
     return load_config(overrides)
+
+
+def _entry_quality_for_order(
+    weight_delta: float,
+    gate2_reasons: tuple[str, ...],
+    trade_quality_status: str,
+) -> tuple[str, tuple[str, ...]]:
+    if trade_quality_status != "EXECUTE" or weight_delta <= 0:
+        return trade_quality_status, ()
+    reason_count = len(gate2_reasons)
+    if reason_count == 0:
+        return "EXECUTE", ()
+    if reason_count == 1:
+        return "ENTRY_CAUTION", gate2_reasons
+    if reason_count == 2:
+        return "STAGE_ENTRY", gate2_reasons
+    return "DEFER_OVERBOUGHT", gate2_reasons
 
 
 def _readiness_status(market_data_cache: str | None, messages: list[str]) -> str:

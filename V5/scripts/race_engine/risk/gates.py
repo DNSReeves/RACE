@@ -38,6 +38,7 @@ class GateReport:
     gate_passes: dict[str, bool]
     gate_failures: dict[str, tuple[str, ...]]
     raw_values: dict[str, float | int]
+    gate2_reasons: tuple[str, ...] = ()
     review_flags: tuple[ReviewFlag, ...] = field(default_factory=tuple)
 
 
@@ -47,7 +48,7 @@ def evaluate_risk_gates(input_data: RiskGateInput) -> GateReport:
     raw: dict[str, float | int] = {}
 
     gate_passes["gate1"] = _gate1(input_data.adjusted_closes, failures, raw)
-    gate_passes["gate2"] = _gate2(input_data.adjusted_closes, failures, raw)
+    gate_passes["gate2"], gate2_reasons = _gate2(input_data.adjusted_closes, failures, raw)
     gate_passes["gate3"] = _gate3(input_data, failures, raw)
     gate_passes["gate4"] = _gate4(input_data.daily_returns, failures, raw)
 
@@ -62,6 +63,7 @@ def evaluate_risk_gates(input_data: RiskGateInput) -> GateReport:
         gate_passes=gate_passes,
         gate_failures=failures,
         raw_values=raw,
+        gate2_reasons=gate2_reasons,
         review_flags=review_flags_for_gate_report(input_data.ticker, failures, input_data.held),
     )
 
@@ -84,7 +86,11 @@ def _gate1(closes: Sequence[float], failures: dict[str, tuple[str, ...]], raw: d
     return not reasons
 
 
-def _gate2(closes: Sequence[float], failures: dict[str, tuple[str, ...]], raw: dict[str, float | int]) -> bool:
+def _gate2(
+    closes: Sequence[float],
+    failures: dict[str, tuple[str, ...]],
+    raw: dict[str, float | int],
+) -> tuple[bool, tuple[str, ...]]:
     rsi14 = rsi(closes, 14)
     ma20 = simple_moving_average(closes, 20)
     std20 = rolling_std(closes, 20)
@@ -101,10 +107,11 @@ def _gate2(closes: Sequence[float], failures: dict[str, tuple[str, ...]], raw: d
         conditions.append("close_gt_50dma_1p12")
     if percentile > 95:
         conditions.append("ret21_gt_95th_percentile")
+    reasons = tuple(conditions)
     if len(conditions) >= 2:
-        failures["gate2"] = tuple(conditions)
-        return False
-    return True
+        failures["gate2"] = reasons
+        return False, reasons
+    return True, reasons
 
 
 def _gate3(input_data: RiskGateInput, failures: dict[str, tuple[str, ...]], raw: dict[str, float | int]) -> bool:
@@ -146,4 +153,3 @@ def _gate4(returns: Sequence[float], failures: dict[str, tuple[str, ...]], raw: 
         return False
     raw["sortino_horizons_used"] = len(passing)
     return True
-

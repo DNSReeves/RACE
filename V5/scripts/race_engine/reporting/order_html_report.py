@@ -90,6 +90,9 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     .buy {{ color: var(--green); font-weight: 700; }}
     .sell {{ color: var(--red); font-weight: 700; }}
     .hold {{ color: var(--muted); font-weight: 700; }}
+    .entry-caution {{ color: var(--amber); font-weight: 700; }}
+    .stage-entry {{ color: var(--amber); font-weight: 700; }}
+    .defer-overbought {{ color: var(--red); font-weight: 700; }}
     .bar {{ height: 8px; background: #e7ecf3; border-radius: 999px; overflow: hidden; }}
     .bar span {{ display: block; height: 100%; background: var(--blue); }}
     .messages {{ margin: 0; padding-left: 18px; }}
@@ -192,6 +195,9 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
     rows = []
     for order in orders:
         side = str(order.get("side", "HOLD"))
+        entry_status = str(order.get("entry_quality_status", "EXECUTE"))
+        entry_reasons = order.get("entry_quality_reasons") or []
+        entry_notes = ", ".join(str(reason) for reason in entry_reasons) if entry_reasons else ""
         rows.append(
             "<tr>"
             f"<td>{escape(str(order.get('ticker', '')))}</td>"
@@ -202,9 +208,11 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
             f"<td class=\"num\">{escape(str(order.get('estimated_shares', 0)))}</td>"
             f"<td>{escape(str(order.get('priority', '')))}</td>"
             f"<td>{escape(str(order.get('trade_quality_status', '')))}</td>"
+            f"<td class=\"{_entry_status_class(entry_status)}\">{escape(entry_status)}</td>"
+            f"<td>{escape(entry_notes)}</td>"
             "</tr>"
         )
-    return "<table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Quality</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    return "<table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
 
 
 def _selected_table(selected: dict[str, list[str]]) -> str:
@@ -258,3 +266,6 @@ def _status_class(status: str) -> str:
     lowered = status.lower()
     return "pass" if lowered == "pass" else "fail" if lowered == "fail" else "warn"
 
+
+def _entry_status_class(status: str) -> str:
+    return status.lower().replace("_", "-")
