@@ -195,6 +195,7 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
     rows = []
     for order in orders:
         side = str(order.get("side", "HOLD"))
+        recommended_action = str(order.get("recommended_action", "REVIEW_MANUALLY"))
         entry_status = str(order.get("entry_quality_status", "EXECUTE"))
         entry_reasons = order.get("entry_quality_reasons") or []
         entry_notes = ", ".join(str(reason) for reason in entry_reasons) if entry_reasons else ""
@@ -209,10 +210,11 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
             f"<td>{escape(str(order.get('priority', '')))}</td>"
             f"<td>{escape(str(order.get('trade_quality_status', '')))}</td>"
             f"<td class=\"{_entry_status_class(entry_status)}\">{escape(entry_status)}</td>"
+            f"<td>{escape(_recommended_action_label(recommended_action))}</td>"
             f"<td>{escape(entry_notes)}</td>"
             "</tr>"
         )
-    return "<table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    return "<table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Recommended Action</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
 
 
 def _selected_table(selected: dict[str, list[str]]) -> str:
@@ -269,3 +271,12 @@ def _status_class(status: str) -> str:
 
 def _entry_status_class(status: str) -> str:
     return status.lower().replace("_", "-")
+
+
+def _recommended_action_label(action: str) -> str:
+    return {
+        "BUY_NOW": "BUY NOW",
+        "STAGE_ENTRY": "STAGE ENTRY",
+        "DEFER_OVERBOUGHT": "DEFER OVERBOUGHT",
+        "REVIEW_MANUALLY": "REVIEW MANUALLY",
+    }.get(action, action.replace("_", " "))

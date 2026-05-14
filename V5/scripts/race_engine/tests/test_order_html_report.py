@@ -22,6 +22,7 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
                 "dollar_change": 30000,
                 "estimated_shares": 82,
                 "priority": "SLEEVE_DRIFT",
+                "recommended_action": "STAGE_ENTRY",
                 "trade_quality_status": "EXECUTE",
                 "entry_quality_status": "STAGE_ENTRY",
                 "entry_quality_reasons": ["rsi14_gt_72", "close_gt_20dma_plus_2std"],
@@ -39,7 +40,10 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert "Dry-Run Orders" in html
     assert "VTI" in html
     assert "Trade Quality" in html
+    assert "Recommended Action" in html
+    assert "STAGE ENTRY" in html
     assert "Entry Quality" in html
+    assert html.index("Entry Quality") < html.index("Recommended Action") < html.index("Entry Notes")
     assert "STAGE_ENTRY" in html
     assert "rsi14_gt_72" in html
     assert "broker" in html
