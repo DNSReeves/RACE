@@ -18,6 +18,7 @@ class OrderListItem:
     trade_quality_status: str
     entry_quality_status: str
     entry_quality_reasons: tuple[str, ...]
+    recommended_action: str
     audit_event_ids: tuple[str, ...]
 
 
@@ -37,6 +38,7 @@ def proposed_order(
     dollar_change = portfolio_value * (target_weight - current_weight) / 100.0
     side = "BUY" if dollar_change > 0 else "SELL" if dollar_change < 0 else "HOLD"
     estimated_shares = 0 if price <= 0 else int(abs(dollar_change) / price)
+    recommended_action = _recommended_action(side, trade_quality_status, entry_quality_status)
     return OrderListItem(
         ticker=ticker,
         side=side,
@@ -49,5 +51,20 @@ def proposed_order(
         trade_quality_status=trade_quality_status,
         entry_quality_status=entry_quality_status,
         entry_quality_reasons=entry_quality_reasons,
+        recommended_action=recommended_action,
         audit_event_ids=audit_event_ids,
     )
+
+
+def _recommended_action(side: str, trade_quality_status: str, entry_quality_status: str) -> str:
+    if trade_quality_status != "EXECUTE":
+        return "REVIEW_MANUALLY"
+    if side != "BUY":
+        return "REVIEW_MANUALLY"
+    if entry_quality_status == "EXECUTE":
+        return "BUY_NOW"
+    if entry_quality_status in {"ENTRY_CAUTION", "STAGE_ENTRY"}:
+        return "STAGE_ENTRY"
+    if entry_quality_status == "DEFER_OVERBOUGHT":
+        return "DEFER_OVERBOUGHT"
+    return "REVIEW_MANUALLY"

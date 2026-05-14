@@ -1,7 +1,7 @@
 from dataclasses import asdict
 
 from race_engine.execution.pipeline import _entry_quality_for_order
-from race_engine.execution.order_list import proposed_order
+from race_engine.execution.order_list import _recommended_action, proposed_order
 from race_engine.execution.trade_quality import TradeQualityComponents, evaluate_trade_quality
 
 
@@ -38,6 +38,7 @@ def test_order_list_outputs_proposed_order_only() -> None:
     assert order.trade_quality_status == "EXECUTE"
     assert order.entry_quality_status == "EXECUTE"
     assert order.entry_quality_reasons == ()
+    assert order.recommended_action == "BUY_NOW"
 
 
 def test_buy_without_gate2_reasons_has_execute_entry_quality() -> None:
@@ -97,3 +98,13 @@ def test_order_json_artifact_contains_entry_quality_fields() -> None:
 
     assert artifact_order["entry_quality_status"] == "ENTRY_CAUTION"
     assert artifact_order["entry_quality_reasons"] == ("rsi14_gt_72",)
+    assert artifact_order["recommended_action"] == "STAGE_ENTRY"
+
+
+def test_recommended_action_mapping() -> None:
+    assert _recommended_action("BUY", "EXECUTE", "EXECUTE") == "BUY_NOW"
+    assert _recommended_action("BUY", "EXECUTE", "ENTRY_CAUTION") == "STAGE_ENTRY"
+    assert _recommended_action("BUY", "EXECUTE", "STAGE_ENTRY") == "STAGE_ENTRY"
+    assert _recommended_action("BUY", "EXECUTE", "DEFER_OVERBOUGHT") == "DEFER_OVERBOUGHT"
+    assert _recommended_action("BUY", "DEFER", "EXECUTE") == "REVIEW_MANUALLY"
+    assert _recommended_action("SELL", "EXECUTE", "EXECUTE") == "REVIEW_MANUALLY"
