@@ -36,3 +36,6 @@ V5/scripts/**/*_api_key.txt
 V5/scripts/race_engine_out/
 race_engine_out/
 
+# Account-specific RACE position exports
+V5/scripts/DNSR-IRA-Positions*.csv
+
