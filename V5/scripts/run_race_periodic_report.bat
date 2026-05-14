@@ -23,7 +23,7 @@ set "ORDER_JSON=%OUT_DIR%\race_order_list.json"
 set "ORDER_HTML=%OUT_DIR%\race_order_report.html"
 
 rem Optional: set this to a CSV with columns ticker,current_weight.
-set "CURRENT_POSITIONS_CSV=C:\Users\david\Development\Python\RACE\V5\scripts\DNSR-IRA-Positions-2026-05-11-172715.csv"
+set "CURRENT_POSITIONS_CSV=C:\Users\david\Development\Python\RACE\V5\scripts\DNSR-IRA-Positions.csv"
 
 if not exist "%OUT_DIR%" mkdir "%OUT_DIR%"
 
