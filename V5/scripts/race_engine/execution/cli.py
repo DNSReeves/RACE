@@ -10,6 +10,9 @@ from pathlib import Path
 from race_engine.execution.pipeline import run_standalone_pipeline
 from race_engine.execution.sleeve_leader_review import sleeve_leaders_from_review
 
+CASH_POSITION_LABELS = {"CASH", "CASH & CASH INVESTMENTS"}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Standalone RACE Engine dry-run")
     parser.add_argument("--race-engine-enable", action="store_true")
@@ -22,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--race-allow-warn-dry-run", action="store_true")
     parser.add_argument("--race-write-atsh-handoff", action="store_true")
     parser.add_argument("--race-sleeve-leader-state")
+    parser.add_argument("--race-available-cash-dollars", type=float)
     return parser
 
 
@@ -35,6 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     leader_state_path = Path(args.race_sleeve_leader_state) if args.race_sleeve_leader_state else output_folder / "race_sleeve_leader_state.json"
     previous_sleeve_leaders = _read_sleeve_leader_state(leader_state_path)
     positions = _read_positions(Path(args.race_current_positions_csv)) if args.race_current_positions_csv else {}
+    available_cash_weight = _available_cash_weight(positions)
     artifact = run_standalone_pipeline(
         config_path=args.race_config,
         market_data_cache=args.race_market_data_cache,
@@ -42,6 +47,8 @@ def main(argv: list[str] | None = None) -> int:
         validation_status=args.race_validation_status,
         allow_warn_dry_run=args.race_allow_warn_dry_run,
         previous_sleeve_leaders=previous_sleeve_leaders,
+        available_cash_weight=available_cash_weight,
+        available_cash_dollars=args.race_available_cash_dollars,
     )
     artifact.setdefault("validation_messages", []).extend(args.race_validation_message)
     (output_folder / "race_order_list.json").write_text(json.dumps(artifact, indent=2, sort_keys=True), encoding="utf-8")
@@ -103,6 +110,11 @@ def _read_positions(path: Path) -> dict[str, float]:
             if parsed_weight is not None:
                 positions[ticker.strip().upper()] = parsed_weight
     return positions
+
+
+def _available_cash_weight(positions: dict[str, float]) -> float | None:
+    cash_weight = sum(weight for ticker, weight in positions.items() if ticker in CASH_POSITION_LABELS)
+    return cash_weight if cash_weight > 0 else None
 
 
 def _find_position_header(rows: list[list[str]]) -> int | None:
