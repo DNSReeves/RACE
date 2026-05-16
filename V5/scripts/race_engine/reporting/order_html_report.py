@@ -15,6 +15,7 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     mode_label = "Diagnostic Only" if diagnostic_only else "Manual Review Ready"
     mode_class = "warn" if diagnostic_only else "pass"
     orders = artifact.get("orders") or []
+    cash_summary = artifact.get("cash_available_for_buys") or {}
     sleeve_leader_review = artifact.get("sleeve_leader_review") or {}
     sleeve_targets = artifact.get("sleeve_targets") or {}
     target_positions = artifact.get("target_positions") or {}
@@ -161,6 +162,7 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     <section class="panel" style="margin-top:16px;">
       <h2>Dry-Run Orders</h2>
       {_orders_table(orders)}
+      {_cash_summary(cash_summary)}
     </section>
 
     <section class="panel leader-review" style="margin-top:16px;">
@@ -228,6 +230,7 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
         entry_status = str(order.get("entry_quality_status", "EXECUTE"))
         entry_reasons = order.get("entry_quality_reasons") or []
         entry_notes = ", ".join(str(reason) for reason in entry_reasons) if entry_reasons else ""
+        cash_status = str(order.get("cash_adjustment_status", ""))
         rows.append(
             "<tr>"
             f"<td>{escape(str(order.get('ticker', '')))}</td>"
@@ -240,10 +243,29 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
             f"<td>{escape(str(order.get('trade_quality_status', '')))}</td>"
             f"<td class=\"{_entry_status_class(entry_status)}\">{escape(entry_status)}</td>"
             f"<td>{escape(_recommended_action_label(recommended_action))}</td>"
+            f"<td>{escape(_cash_status_label(cash_status))}</td>"
             f"<td>{escape(entry_notes)}</td>"
             "</tr>"
         )
-    return "<div class=\"table-scroll\"><table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Recommended Action</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    return "<div class=\"table-scroll\"><table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Recommended Action</th><th>Cash Status</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+
+
+def _cash_summary(summary: dict[str, Any]) -> str:
+    if not summary:
+        return ""
+    available = summary.get("available_cash_dollars")
+    demand = summary.get("buy_demand_dollars")
+    limited = bool(summary.get("cash_limited"))
+    scale = float(summary.get("scale_factor", 1.0))
+    status = "Cash-limited" if limited else "Within available cash" if available is not None else "Available cash not provided"
+    return (
+        "<div class=\"subtle\" style=\"margin-top:10px;\">"
+        f"Cash sizing: {escape(status)}. "
+        f"Available cash: ${_fmt_optional_num(available, 2)}. "
+        f"Uncapped buy demand: ${_fmt_optional_num(demand, 2)}. "
+        f"Scale factor: {_fmt_num(scale, 3)}."
+        "</div>"
+    )
 
 
 def _selected_table(selected: dict[str, list[str]]) -> str:
@@ -368,3 +390,11 @@ def _recommended_action_label(action: str) -> str:
         "DEFER_OVERBOUGHT": "DEFER OVERBOUGHT",
         "REVIEW_MANUALLY": "REVIEW MANUALLY",
     }.get(action, action.replace("_", " "))
+
+
+def _cash_status_label(status: str) -> str:
+    return {
+        "CASH_LIMITED": "CASH LIMITED",
+        "WITHIN_AVAILABLE_CASH": "WITHIN CASH",
+        "CASH_NOT_PROVIDED": "CASH NOT PROVIDED",
+    }.get(status, status.replace("_", " "))

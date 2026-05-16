@@ -45,6 +45,8 @@ def run_standalone_pipeline(
     allow_warn_dry_run: bool,
     portfolio_value: float = 100_000.0,
     previous_sleeve_leaders: dict[str, str] | None = None,
+    available_cash_weight: float | None = None,
+    available_cash_dollars: float | None = None,
 ) -> dict[str, Any]:
     messages: list[str] = []
     try:
@@ -84,6 +86,8 @@ def run_standalone_pipeline(
             portfolio_value,
             diagnostic_only,
             previous_sleeve_leaders or {},
+            available_cash_weight,
+            available_cash_dollars,
         )
     except Exception as exc:
         artifact["diagnostic_only"] = True
@@ -104,6 +108,8 @@ def _compute_pipeline(
     portfolio_value: float,
     diagnostic_only: bool,
     previous_sleeve_leaders: dict[str, str],
+    available_cash_weight: float | None,
+    available_cash_dollars: float | None,
 ) -> dict[str, Any]:
     adapter = RaceMarketDataAdapter(market_data_cache)
     price_bars = {ticker: adapter.get_ohlcv(ticker) for ticker in _required_price_tickers()}
@@ -179,6 +185,7 @@ def _compute_pipeline(
         )
     )
     orders = []
+    latest_price = {}
     if not diagnostic_only:
         score_by_ticker = {score.ticker: score.score for score in scores}
         latest_price = {ticker: adapter.get_ohlcv(ticker)[-1].adjusted_close for ticker in target_positions}
@@ -219,6 +226,13 @@ def _compute_pipeline(
                         )
                     )
                 )
+    cash_summary = _apply_available_cash_limit(
+        orders,
+        portfolio_value=portfolio_value,
+        available_cash_weight=available_cash_weight,
+        available_cash_dollars=available_cash_dollars,
+        latest_price=latest_price,
+    )
     sleeve_leader_review = build_sleeve_leader_review(
         SleeveLeaderReviewInputs(
             ranked=ranked,
@@ -244,6 +258,7 @@ def _compute_pipeline(
         "selected_etfs": selected_etfs,
         "target_positions": target_positions,
         "orders": orders,
+        "cash_available_for_buys": cash_summary,
         "sleeve_leader_review": sleeve_leader_review,
         "gate_failures": {report.ticker: report.gate_failures for report in gate_reports if report.gate_failures},
     }
@@ -382,6 +397,13 @@ def _base_artifact(
         "current_positions": current_positions,
         "target_positions": {},
         "orders": [],
+        "cash_available_for_buys": {
+            "available_cash_dollars": None,
+            "available_cash_weight": None,
+            "buy_demand_dollars": 0.0,
+            "cash_limited": False,
+            "scale_factor": 1.0,
+        },
         "sleeve_leader_review": {},
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "config_path": config_path,
@@ -391,3 +413,52 @@ def _base_artifact(
 
 def _worst_status(left: str, right: str) -> str:
     return left if STATUS_ORDER[left] >= STATUS_ORDER[right] else right
+
+
+def _apply_available_cash_limit(
+    orders: list[dict[str, Any]],
+    portfolio_value: float,
+    available_cash_weight: float | None,
+    available_cash_dollars: float | None,
+    latest_price: dict[str, float],
+) -> dict[str, Any]:
+    resolved_cash = available_cash_dollars
+    if resolved_cash is None and available_cash_weight is not None:
+        resolved_cash = portfolio_value * available_cash_weight / 100.0
+    buy_orders = [order for order in orders if order.get("side") == "BUY"]
+    buy_demand = round(sum(float(order.get("dollar_change", 0.0)) for order in buy_orders), 2)
+    summary = {
+        "available_cash_dollars": None if resolved_cash is None else round(max(0.0, resolved_cash), 2),
+        "available_cash_weight": available_cash_weight,
+        "buy_demand_dollars": buy_demand,
+        "cash_limited": False,
+        "scale_factor": 1.0,
+    }
+    if resolved_cash is None or buy_demand <= 0:
+        for order in buy_orders:
+            order["cash_adjustment_status"] = "CASH_NOT_PROVIDED" if resolved_cash is None else "WITHIN_AVAILABLE_CASH"
+        return summary
+    available_cash = max(0.0, resolved_cash)
+    if buy_demand <= available_cash:
+        for order in buy_orders:
+            order["cash_adjustment_status"] = "WITHIN_AVAILABLE_CASH"
+        return summary
+
+    scale_factor = available_cash / buy_demand if buy_demand else 1.0
+    summary["cash_limited"] = True
+    summary["scale_factor"] = round(scale_factor, 6)
+    for order in buy_orders:
+        original_dollar = float(order.get("dollar_change", 0.0))
+        original_target = float(order.get("target_weight", 0.0))
+        adjusted_dollar = round(original_dollar * scale_factor, 2)
+        current_weight = float(order.get("current_weight", 0.0))
+        adjusted_target = current_weight + (adjusted_dollar / portfolio_value * 100.0)
+        ticker = str(order.get("ticker", ""))
+        price = latest_price.get(ticker, 0.0)
+        order["uncapped_dollar_change"] = round(original_dollar, 2)
+        order["uncapped_target_weight"] = round(original_target, 6)
+        order["dollar_change"] = adjusted_dollar
+        order["target_weight"] = round(adjusted_target, 6)
+        order["estimated_shares"] = 0 if price <= 0 else int(abs(adjusted_dollar) / price)
+        order["cash_adjustment_status"] = "CASH_LIMITED"
+    return summary

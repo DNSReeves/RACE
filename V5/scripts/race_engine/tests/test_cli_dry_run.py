@@ -2,7 +2,7 @@ import json
 import sqlite3
 from datetime import date, timedelta
 
-from race_engine.execution.cli import main, _read_positions
+from race_engine.execution.cli import main, _available_cash_weight, _read_positions
 from race_engine.allocation.sleeves import BASELINE_UNIVERSE
 from race_engine.data.macro_loader import REQUIRED_TIER1_SERIES
 
@@ -26,6 +26,12 @@ def test_read_positions_supports_brokerage_export_with_title_row(tmp_path) -> No
     parsed = _read_positions(positions)
 
     assert parsed == {"DBMF": 6.83, "BND": 3.18}
+
+
+def test_available_cash_weight_uses_brokerage_cash_line_only() -> None:
+    positions = {"CASH & CASH INVESTMENTS": 3.78, "SWVXX": 20.08, "DBMF": 9.01}
+
+    assert _available_cash_weight(positions) == 3.78
 
 
 def test_missing_data_returns_diagnostic_only(tmp_path) -> None:
@@ -64,6 +70,33 @@ def test_dry_run_order_list_generated_but_not_transmitted(tmp_path) -> None:
     assert data["sleeve_targets"]
     assert data["target_positions"]
     assert not (tmp_path / "race_ats_handoff.md").exists()
+
+
+def test_buy_recommendations_are_limited_to_available_cash(tmp_path) -> None:
+    cache = _market_cache(tmp_path)
+    positions = tmp_path / "positions.csv"
+    positions.write_text("ticker,current_weight\nSPY,10\nCASH & CASH INVESTMENTS,2\nSWVXX,20\n", encoding="utf-8")
+
+    assert main([
+        "--race-engine-enable",
+        "--race-current-positions-csv",
+        str(positions),
+        "--race-market-data-cache",
+        str(cache),
+        "--race-output-folder",
+        str(tmp_path),
+        "--race-validation-status",
+        "PASS",
+    ]) == 0
+
+    data = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
+    buy_total = sum(order["dollar_change"] for order in data["orders"] if order["side"] == "BUY")
+
+    assert data["cash_available_for_buys"]["available_cash_dollars"] == 2000.0
+    assert data["cash_available_for_buys"]["cash_limited"] is True
+    assert buy_total <= 2000.01
+    assert all(order["cash_adjustment_status"] == "CASH_LIMITED" for order in data["orders"] if order["side"] == "BUY")
+    assert any("uncapped_dollar_change" in order for order in data["orders"] if order["side"] == "BUY")
 
 
 def test_cli_persists_sleeve_leader_state_for_future_diagnostics(tmp_path) -> None:

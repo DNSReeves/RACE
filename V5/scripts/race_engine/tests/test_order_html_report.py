@@ -26,8 +26,16 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
                 "trade_quality_status": "EXECUTE",
                 "entry_quality_status": "STAGE_ENTRY",
                 "entry_quality_reasons": ["rsi14_gt_72", "close_gt_20dma_plus_2std"],
+                "cash_adjustment_status": "CASH_LIMITED",
             }
         ],
+        "cash_available_for_buys": {
+            "available_cash_dollars": 2000.0,
+            "available_cash_weight": 2.0,
+            "buy_demand_dollars": 30000.0,
+            "cash_limited": True,
+            "scale_factor": 0.066667,
+        },
         "sleeve_leader_review": {
             "intl_equity": {
                 "leader": "EEM",
@@ -62,6 +70,9 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert "VTI" in html
     assert "Trade Quality" in html
     assert "Recommended Action" in html
+    assert "Cash Status" in html
+    assert "CASH LIMITED" in html
+    assert "Cash sizing: Cash-limited" in html
     assert "STAGE ENTRY" in html
     assert "Entry Quality" in html
     assert html.index("Entry Quality") < html.index("Recommended Action") < html.index("Entry Notes")
