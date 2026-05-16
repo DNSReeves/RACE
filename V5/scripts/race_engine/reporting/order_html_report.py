@@ -15,6 +15,7 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     mode_label = "Diagnostic Only" if diagnostic_only else "Manual Review Ready"
     mode_class = "warn" if diagnostic_only else "pass"
     orders = artifact.get("orders") or []
+    sleeve_leader_review = artifact.get("sleeve_leader_review") or {}
     sleeve_targets = artifact.get("sleeve_targets") or {}
     target_positions = artifact.get("target_positions") or {}
     gate_failures = artifact.get("gate_failures") or {}
@@ -140,6 +141,12 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
       {_orders_table(orders)}
     </section>
 
+    <section class="panel" style="margin-top:16px;">
+      <h2>Sleeve Leader Review</h2>
+      <div class="subtle">Diagnostic only. Does not authorize automatic sells or replacements.</div>
+      {_sleeve_leader_review_table(sleeve_leader_review)}
+    </section>
+
     <section class="grid two" style="margin-top:16px;">
       <div class="panel">
         <h2>Selected ETFs</h2>
@@ -227,6 +234,47 @@ def _selected_table(selected: dict[str, list[str]]) -> str:
     return f"<table><thead><tr><th>Sleeve</th><th>Selected ETFs</th></tr></thead><tbody>{rows}</tbody></table>"
 
 
+def _sleeve_leader_review_table(review: dict[str, Any]) -> str:
+    if not review:
+        return '<div class="subtle">No sleeve leader review available.</div>'
+    rows = []
+    for sleeve, sleeve_review in sorted(review.items()):
+        leader = sleeve_review.get("leader", "")
+        leader_score = sleeve_review.get("leader_score")
+        comparisons = sleeve_review.get("comparisons") or []
+        if not comparisons:
+            rows.append(
+                "<tr>"
+                f"<td>{escape(str(sleeve))}</td>"
+                f"<td>{escape(str(leader))}</td>"
+                f"<td class=\"num\">{_fmt_optional_num(leader_score, 3)}</td>"
+                "<td></td><td class=\"num\">n/a</td><td class=\"num\">n/a</td><td>n/a</td>"
+                "<td>n/a</td><td>n/a</td><td>HOLD_EXISTING</td><td>false</td><td></td>"
+                "<td>No held sleeve ETF to compare.</td>"
+                "</tr>"
+            )
+            continue
+        for comparison in comparisons:
+            rows.append(
+                "<tr>"
+                f"<td>{escape(str(sleeve))}</td>"
+                f"<td>{escape(str(leader))}</td>"
+                f"<td class=\"num\">{_fmt_optional_num(leader_score, 3)}</td>"
+                f"<td>{escape(str(comparison.get('held_ticker') or ''))}</td>"
+                f"<td class=\"num\">{_fmt_optional_num(comparison.get('held_score'), 3)}</td>"
+                f"<td class=\"num\">{_fmt_optional_num(comparison.get('score_gap'), 3)}</td>"
+                f"<td>{escape(str(comparison.get('score_gap_tier', '')))}</td>"
+                f"<td>{escape(str(comparison.get('leader_entry_quality_status', '')))}</td>"
+                f"<td>{escape(str(comparison.get('leader_persistence_status', '')))}</td>"
+                f"<td>{escape(str(comparison.get('replacement_action', '')))}</td>"
+                f"<td>{escape(str(comparison.get('replacement_allowed', False)).lower())}</td>"
+                f"<td>{escape(', '.join(str(blocker) for blocker in comparison.get('blockers', [])))}</td>"
+                f"<td>{escape(str(comparison.get('operator_note', '')))}</td>"
+                "</tr>"
+            )
+    return "<table><thead><tr><th>Sleeve</th><th>Leader</th><th class=\"num\">Leader Score</th><th>Held Ticker</th><th class=\"num\">Held Score</th><th class=\"num\">Score Gap</th><th>Score Gap Tier</th><th>Entry Quality</th><th>Persistence</th><th>Replacement Action</th><th>Replacement Allowed</th><th>Blockers</th><th>Operator Note</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+
+
 def _messages(messages: list[Any]) -> str:
     if not messages:
         return '<div class="subtle">No validation messages.</div>'
@@ -256,6 +304,12 @@ def _fmt_num(value: Any, digits: int) -> str:
     if value is None:
         return "n/a"
     return f"{float(value):,.{digits}f}"
+
+
+def _fmt_optional_num(value: Any, digits: int) -> str:
+    if value is None:
+        return "n/a"
+    return _fmt_num(value, digits)
 
 
 def _fmt_pct(value: Any) -> str:

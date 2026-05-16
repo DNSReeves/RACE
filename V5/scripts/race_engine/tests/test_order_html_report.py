@@ -28,6 +28,27 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
                 "entry_quality_reasons": ["rsi14_gt_72", "close_gt_20dma_plus_2std"],
             }
         ],
+        "sleeve_leader_review": {
+            "intl_equity": {
+                "leader": "EEM",
+                "leader_score": 0.82,
+                "held_tickers": ["AVEM"],
+                "comparisons": [
+                    {
+                        "held_ticker": "AVEM",
+                        "held_score": 0.68,
+                        "score_gap": 0.14,
+                        "score_gap_tier": "MODERATE_ADVANTAGE",
+                        "leader_entry_quality_status": "ENTRY_CAUTION",
+                        "leader_persistence_status": "UNKNOWN",
+                        "replacement_action": "STAGE_ENTRY",
+                        "replacement_allowed": False,
+                        "blockers": ["leader_persistence_unknown", "entry_quality_not_execute", "diagnostic_only_phase"],
+                        "operator_note": "EEM currently leads AVEM tactically, but replacement is diagnostic-only.",
+                    }
+                ],
+            }
+        },
         "gate_failures": {"SPY": {"gate2": ["rsi14_gt_72"]}},
         "validation_messages": [],
     }
@@ -46,6 +67,10 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert html.index("Entry Quality") < html.index("Recommended Action") < html.index("Entry Notes")
     assert "STAGE_ENTRY" in html
     assert "rsi14_gt_72" in html
+    assert "Sleeve Leader Review" in html
+    assert "Diagnostic only. Does not authorize automatic sells or replacements." in html
+    assert "AVEM" in html
+    assert "Replacement Action" in html
     assert "broker" in html
 
 

@@ -21,6 +21,7 @@ from race_engine.data.macro_loader import REQUIRED_TIER1_SERIES
 from race_engine.execution.order_list import proposed_order
 from race_engine.execution.rebalance import RebalanceTrigger, TriggerPriority, batch_triggers
 from race_engine.execution.replacement import replacement_decision
+from race_engine.execution.sleeve_leader_review import SleeveLeaderReviewInputs, build_sleeve_leader_review
 from race_engine.execution.trade_quality import TradeQualityComponents, evaluate_trade_quality
 from race_engine.risk.gates import RiskGateInput, evaluate_risk_gates
 from race_engine.scoring.composite import ETFScoreInput, composite_scores
@@ -205,6 +206,21 @@ def _compute_pipeline(
                         )
                     )
                 )
+    sleeve_leader_review = build_sleeve_leader_review(
+        SleeveLeaderReviewInputs(
+            ranked=ranked,
+            current_positions=current_positions,
+            target_positions=target_positions,
+            sleeve_targets=blended.targets,
+            leader_gate2_reasons={
+                report.ticker: report.gate2_reasons
+                for report in gate_reports
+                if report.ticker in {item.ticker for item in ranked}
+            },
+            gate_failures={report.ticker: report.gate_failures for report in gate_reports if report.gate_failures},
+            minimum_trade_weight=config.rebalancing.minimum_trade_weight,
+        )
+    )
 
     return {
         "confirmed_regime": regime.confirmed_regime,
@@ -214,6 +230,7 @@ def _compute_pipeline(
         "selected_etfs": selected_etfs,
         "target_positions": target_positions,
         "orders": orders,
+        "sleeve_leader_review": sleeve_leader_review,
         "gate_failures": {report.ticker: report.gate_failures for report in gate_reports if report.gate_failures},
     }
 
@@ -351,6 +368,7 @@ def _base_artifact(
         "current_positions": current_positions,
         "target_positions": {},
         "orders": [],
+        "sleeve_leader_review": {},
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "config_path": config_path,
         "market_data_source": market_data_source,
