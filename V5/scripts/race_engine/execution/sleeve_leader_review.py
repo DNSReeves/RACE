@@ -73,6 +73,30 @@ def build_sleeve_leader_review(inputs: SleeveLeaderReviewInputs) -> dict[str, di
     return review
 
 
+def leader_persistence_status_by_sleeve(
+    ranked: tuple[RankedETF, ...],
+    previous_leaders: dict[str, str],
+) -> dict[str, str]:
+    statuses: dict[str, str] = {}
+    for sleeve, leader in _leaders_by_sleeve(ranked).items():
+        previous = previous_leaders.get(sleeve)
+        if previous is None:
+            statuses[sleeve] = "UNKNOWN"
+        elif previous == leader.ticker:
+            statuses[sleeve] = "PERSISTENT"
+        else:
+            statuses[sleeve] = "NEW_SIGNAL"
+    return statuses
+
+
+def sleeve_leaders_from_review(review: dict[str, dict[str, Any]]) -> dict[str, str]:
+    return {
+        sleeve: str(sleeve_review["leader"])
+        for sleeve, sleeve_review in review.items()
+        if sleeve_review.get("leader")
+    }
+
+
 def score_gap_tier(score_gap: float) -> str:
     """Classify the raw RACE composite-score gap using diagnostic review bands."""
     if score_gap < 0.05:

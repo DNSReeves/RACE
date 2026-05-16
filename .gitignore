@@ -24,6 +24,8 @@ out.dir/
 logs/
 *.log
 V5/scripts/*-Positions-*.csv
+V5/scripts/Positions*.csv
+V5/scripts/*Positions*.csv
 
 # Local environment/secrets
 .env
@@ -35,6 +37,11 @@ V5/scripts/**/*_api_key.txt
 
 V5/scripts/race_engine_out/
 race_engine_out/
+**/race_engine_out/
+**/race_order_list.json
+**/race_order_report.html
+**/race_ats_handoff.md
+**/race_sleeve_leader_state.json
 
 # Account-specific RACE position exports
 V5/scripts/DNSR-IRA-Positions*.csv

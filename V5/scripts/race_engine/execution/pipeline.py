@@ -21,7 +21,11 @@ from race_engine.data.macro_loader import REQUIRED_TIER1_SERIES
 from race_engine.execution.order_list import proposed_order
 from race_engine.execution.rebalance import RebalanceTrigger, TriggerPriority, batch_triggers
 from race_engine.execution.replacement import replacement_decision
-from race_engine.execution.sleeve_leader_review import SleeveLeaderReviewInputs, build_sleeve_leader_review
+from race_engine.execution.sleeve_leader_review import (
+    SleeveLeaderReviewInputs,
+    build_sleeve_leader_review,
+    leader_persistence_status_by_sleeve,
+)
 from race_engine.execution.trade_quality import TradeQualityComponents, evaluate_trade_quality
 from race_engine.risk.gates import RiskGateInput, evaluate_risk_gates
 from race_engine.scoring.composite import ETFScoreInput, composite_scores
@@ -40,6 +44,7 @@ def run_standalone_pipeline(
     validation_status: str,
     allow_warn_dry_run: bool,
     portfolio_value: float = 100_000.0,
+    previous_sleeve_leaders: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     messages: list[str] = []
     try:
@@ -72,7 +77,14 @@ def run_standalone_pipeline(
         return artifact
 
     try:
-        pipeline = _compute_pipeline(config, Path(market_data_cache or ""), current_positions, portfolio_value, diagnostic_only)
+        pipeline = _compute_pipeline(
+            config,
+            Path(market_data_cache or ""),
+            current_positions,
+            portfolio_value,
+            diagnostic_only,
+            previous_sleeve_leaders or {},
+        )
     except Exception as exc:
         artifact["diagnostic_only"] = True
         artifact["validation_status"] = "FAIL"
@@ -91,6 +103,7 @@ def _compute_pipeline(
     current_positions: dict[str, float],
     portfolio_value: float,
     diagnostic_only: bool,
+    previous_sleeve_leaders: dict[str, str],
 ) -> dict[str, Any]:
     adapter = RaceMarketDataAdapter(market_data_cache)
     price_bars = {ticker: adapter.get_ohlcv(ticker) for ticker in _required_price_tickers()}
@@ -219,6 +232,7 @@ def _compute_pipeline(
             },
             gate_failures={report.ticker: report.gate_failures for report in gate_reports if report.gate_failures},
             minimum_trade_weight=config.rebalancing.minimum_trade_weight,
+            leader_persistence_by_sleeve=leader_persistence_status_by_sleeve(ranked, previous_sleeve_leaders),
         )
     )
 

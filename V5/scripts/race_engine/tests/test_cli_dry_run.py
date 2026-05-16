@@ -66,6 +66,39 @@ def test_dry_run_order_list_generated_but_not_transmitted(tmp_path) -> None:
     assert not (tmp_path / "race_ats_handoff.md").exists()
 
 
+def test_cli_persists_sleeve_leader_state_for_future_diagnostics(tmp_path) -> None:
+    cache = _market_cache(tmp_path)
+    state = tmp_path / "leader_state.json"
+
+    args = [
+        "--race-engine-enable",
+        "--race-market-data-cache",
+        str(cache),
+        "--race-output-folder",
+        str(tmp_path),
+        "--race-sleeve-leader-state",
+        str(state),
+        "--race-validation-status",
+        "PASS",
+    ]
+    assert main(args) == 0
+    first = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
+    assert state.exists()
+    assert any(
+        comparison["leader_persistence_status"] == "UNKNOWN"
+        for sleeve in first["sleeve_leader_review"].values()
+        for comparison in sleeve["comparisons"]
+    )
+
+    assert main(args) == 0
+    second = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
+    assert any(
+        comparison["leader_persistence_status"] == "PERSISTENT"
+        for sleeve in second["sleeve_leader_review"].values()
+        for comparison in sleeve["comparisons"]
+    )
+
+
 def test_validation_fail_blocks_actionable_labeling(tmp_path) -> None:
     cache = _market_cache(tmp_path)
     assert main([
