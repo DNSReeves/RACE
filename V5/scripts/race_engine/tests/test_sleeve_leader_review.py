@@ -1,5 +1,10 @@
 from race_engine.construction.selector import RankedETF
-from race_engine.execution.sleeve_leader_review import SleeveLeaderReviewInputs, build_sleeve_leader_review
+from race_engine.execution.sleeve_leader_review import (
+    SleeveLeaderReviewInputs,
+    build_sleeve_leader_review,
+    leader_persistence_status_by_sleeve,
+    sleeve_leaders_from_review,
+)
 
 
 def test_sleeve_leader_is_computed_from_ranked_eligible_etfs() -> None:
@@ -131,6 +136,36 @@ def test_avem_eem_fixture_does_not_automatically_sell_avem() -> None:
     assert comparison["held_ticker"] == "AVEM"
     assert comparison["replacement_allowed"] is False
     assert comparison["replacement_action"] != "REPLACE_REVIEW"
+
+
+def test_leader_persistence_statuses_compare_current_leaders_to_prior_state() -> None:
+    ranked = (
+        RankedETF("AVEM", "intl_equity", 0.68),
+        RankedETF("EEM", "intl_equity", 0.82),
+        RankedETF("SPY", "us_equity_core", 0.50),
+    )
+
+    statuses = leader_persistence_status_by_sleeve(
+        ranked,
+        {"intl_equity": "EEM", "us_equity_core": "IVV"},
+    )
+
+    assert statuses["intl_equity"] == "PERSISTENT"
+    assert statuses["us_equity_core"] == "NEW_SIGNAL"
+
+
+def test_sleeve_leaders_can_be_extracted_for_state_persistence() -> None:
+    review = build_sleeve_leader_review(
+        _inputs(
+            ranked=(
+                RankedETF("AVEM", "intl_equity", 0.68),
+                RankedETF("EEM", "intl_equity", 0.82),
+            ),
+            current_positions={"AVEM": 5.0},
+        )
+    )
+
+    assert sleeve_leaders_from_review(review) == {"intl_equity": "EEM"}
 
 
 def _inputs(

@@ -71,6 +71,9 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert "Diagnostic only. Does not authorize automatic sells or replacements." in html
     assert "AVEM" in html
     assert "Replacement Action" in html
+    assert "class=\"pill action-stage-entry\"" in html
+    assert "class=\"pill persistence-unknown\"" in html
+    assert "class=\"blockers\"" in html
     assert "broker" in html
 
 

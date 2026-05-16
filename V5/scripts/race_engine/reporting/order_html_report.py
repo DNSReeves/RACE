@@ -94,6 +94,28 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     .entry-caution {{ color: var(--amber); font-weight: 700; }}
     .stage-entry {{ color: var(--amber); font-weight: 700; }}
     .defer-overbought {{ color: var(--red); font-weight: 700; }}
+    .table-scroll {{ overflow-x: auto; }}
+    .leader-review table {{ min-width: 1320px; }}
+    .leader-review .subtle {{ margin-bottom: 10px; }}
+    .pill {{
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 750;
+      line-height: 1.25;
+      white-space: nowrap;
+      background: #eef2f7;
+      color: var(--muted);
+    }}
+    .pill.action-hold-existing {{ background: #eef2f7; color: var(--muted); }}
+    .pill.action-add-to-leader, .pill.action-replace-review {{ background: #dff7eb; color: var(--green); }}
+    .pill.action-stage-entry {{ background: #fff1d6; color: var(--amber); }}
+    .pill.action-block-replacement, .pill.action-defer-replacement-overbought, .pill.action-review-manually {{ background: #fde2df; color: var(--red); }}
+    .pill.persistence-persistent {{ background: #dff7eb; color: var(--green); }}
+    .pill.persistence-new-signal {{ background: #fff1d6; color: var(--amber); }}
+    .pill.persistence-unknown {{ background: #eef2f7; color: var(--muted); }}
+    .blockers {{ display: flex; flex-wrap: wrap; gap: 4px; }}
     .bar {{ height: 8px; background: #e7ecf3; border-radius: 999px; overflow: hidden; }}
     .bar span {{ display: block; height: 100%; background: var(--blue); }}
     .messages {{ margin: 0; padding-left: 18px; }}
@@ -141,7 +163,7 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
       {_orders_table(orders)}
     </section>
 
-    <section class="panel" style="margin-top:16px;">
+    <section class="panel leader-review" style="margin-top:16px;">
       <h2>Sleeve Leader Review</h2>
       <div class="subtle">Diagnostic only. Does not authorize automatic sells or replacements.</div>
       {_sleeve_leader_review_table(sleeve_leader_review)}
@@ -221,7 +243,7 @@ def _orders_table(orders: list[dict[str, Any]]) -> str:
             f"<td>{escape(entry_notes)}</td>"
             "</tr>"
         )
-    return "<table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Recommended Action</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    return "<div class=\"table-scroll\"><table><thead><tr><th>Ticker</th><th>Side</th><th class=\"num\">Target</th><th class=\"num\">Current</th><th class=\"num\">Dollar Change</th><th class=\"num\">Shares</th><th>Priority</th><th>Trade Quality</th><th>Entry Quality</th><th>Recommended Action</th><th>Entry Notes</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
 
 
 def _selected_table(selected: dict[str, list[str]]) -> str:
@@ -263,16 +285,16 @@ def _sleeve_leader_review_table(review: dict[str, Any]) -> str:
                 f"<td>{escape(str(comparison.get('held_ticker') or ''))}</td>"
                 f"<td class=\"num\">{_fmt_optional_num(comparison.get('held_score'), 3)}</td>"
                 f"<td class=\"num\">{_fmt_optional_num(comparison.get('score_gap'), 3)}</td>"
-                f"<td>{escape(str(comparison.get('score_gap_tier', '')))}</td>"
+                f"<td>{_pill(str(comparison.get('score_gap_tier', '')), 'tier')}</td>"
                 f"<td>{escape(str(comparison.get('leader_entry_quality_status', '')))}</td>"
-                f"<td>{escape(str(comparison.get('leader_persistence_status', '')))}</td>"
-                f"<td>{escape(str(comparison.get('replacement_action', '')))}</td>"
+                f"<td>{_pill(str(comparison.get('leader_persistence_status', '')), 'persistence')}</td>"
+                f"<td>{_pill(str(comparison.get('replacement_action', '')), 'action')}</td>"
                 f"<td>{escape(str(comparison.get('replacement_allowed', False)).lower())}</td>"
-                f"<td>{escape(', '.join(str(blocker) for blocker in comparison.get('blockers', [])))}</td>"
+                f"<td>{_blocker_pills(comparison.get('blockers', []))}</td>"
                 f"<td>{escape(str(comparison.get('operator_note', '')))}</td>"
                 "</tr>"
             )
-    return "<table><thead><tr><th>Sleeve</th><th>Leader</th><th class=\"num\">Leader Score</th><th>Held Ticker</th><th class=\"num\">Held Score</th><th class=\"num\">Score Gap</th><th>Score Gap Tier</th><th>Entry Quality</th><th>Persistence</th><th>Replacement Action</th><th>Replacement Allowed</th><th>Blockers</th><th>Operator Note</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    return "<div class=\"table-scroll\"><table><thead><tr><th>Sleeve</th><th>Leader</th><th class=\"num\">Leader Score</th><th>Held Ticker</th><th class=\"num\">Held Score</th><th class=\"num\">Score Gap</th><th>Score Gap Tier</th><th>Entry Quality</th><th>Persistence</th><th>Replacement Action</th><th>Replacement Allowed</th><th>Blockers</th><th>Operator Note</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
 
 
 def _messages(messages: list[Any]) -> str:
@@ -321,6 +343,18 @@ def _fmt_pct(value: Any) -> str:
 def _status_class(status: str) -> str:
     lowered = status.lower()
     return "pass" if lowered == "pass" else "fail" if lowered == "fail" else "warn"
+
+
+def _pill(value: str, kind: str) -> str:
+    css_value = value.lower().replace("_", "-")
+    return f"<span class=\"pill {kind}-{escape(css_value)}\">{escape(value)}</span>"
+
+
+def _blocker_pills(blockers: Any) -> str:
+    items = [str(blocker) for blocker in blockers]
+    if not items:
+        return ""
+    return '<div class="blockers">' + ''.join(_pill(item, "blocker") for item in items) + '</div>'
 
 
 def _entry_status_class(status: str) -> str:
