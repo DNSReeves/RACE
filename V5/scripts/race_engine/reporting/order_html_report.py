@@ -8,6 +8,23 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from race_engine.allocation.sleeves import BASELINE_UNIVERSE
+
+
+CASH_EQUIVALENT_TICKERS = {
+    "CASH",
+    "CASH & CASH INVESTMENTS",
+    "FDRXX",
+    "SPAXX",
+    "SPRXX",
+    "SNSXX",
+    "SNVXX",
+    "SWVXX",
+    "VMFXX",
+    "VUSXX",
+}
+SLEEVE_BY_TICKER = {entry.ticker: entry.sleeve for entry in BASELINE_UNIVERSE}
+
 
 def render_order_html_report(artifact: dict[str, Any]) -> str:
     status = str(artifact.get("validation_status", "UNKNOWN"))
@@ -18,6 +35,7 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     cash_summary = artifact.get("cash_available_for_buys") or {}
     sleeve_leader_review = artifact.get("sleeve_leader_review") or {}
     sleeve_targets = artifact.get("sleeve_targets") or {}
+    current_positions = artifact.get("current_positions") or {}
     target_positions = artifact.get("target_positions") or {}
     gate_failures = artifact.get("gate_failures") or {}
     generated_at = _format_timestamp(artifact.get("timestamp"))
@@ -148,6 +166,11 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
       {_kpi("Target Positions", len(target_positions))}
     </section>
 
+    <section class="panel" style="margin-top:16px;">
+      <h2>Current Positions</h2>
+      {_current_positions_table(current_positions)}
+    </section>
+
     <section class="grid two">
       <div class="panel">
         <h2>Sleeve Targets</h2>
@@ -187,6 +210,11 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
       {_gate_table(gate_failures)}
     </section>
 
+    <section class="panel" style="margin-top:16px;">
+      <h2>Proposed Positions By Sleeve</h2>
+      {_proposed_positions_by_sleeve_table(target_positions)}
+    </section>
+
     <div class="footer">
       RACE output is dry-run/manual-review only. This report does not transmit orders or call a broker.
     </div>
@@ -218,6 +246,42 @@ def _weights_table(weights: dict[str, Any], label: str) -> str:
             f"<tr><td>{escape(str(name))}</td><td class=\"num\">{value:.2f}%</td><td><div class=\"bar\"><span style=\"width:{max(0, min(100, value)):.2f}%\"></span></div></td></tr>"
         )
     return f"<table><thead><tr><th>{escape(label)}</th><th class=\"num\">Weight</th><th>Scale</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
+
+
+def _current_positions_table(current_positions: dict[str, Any]) -> str:
+    if not current_positions:
+        return '<div class="subtle">No current positions provided.</div>'
+    rows = []
+    for ticker, weight in sorted(current_positions.items(), key=lambda item: (_position_sleeve(str(item[0])), str(item[0]))):
+        value = float(weight)
+        sleeve = _position_sleeve(str(ticker))
+        rows.append(
+            "<tr>"
+            f"<td>{escape(str(ticker))}</td>"
+            f"<td>{escape(sleeve)}</td>"
+            f"<td class=\"num\">{value:.2f}%</td>"
+            f"<td><div class=\"bar\"><span style=\"width:{max(0, min(100, value)):.2f}%\"></span></div></td>"
+            "</tr>"
+        )
+    return "<div class=\"table-scroll\"><table><thead><tr><th>Ticker</th><th>Sleeve</th><th class=\"num\">Current Weight</th><th>Scale</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+
+
+def _proposed_positions_by_sleeve_table(target_positions: dict[str, Any]) -> str:
+    if not target_positions:
+        return '<div class="subtle">No proposed positions available.</div>'
+    rows = []
+    for ticker, weight in sorted(target_positions.items(), key=lambda item: (_position_sleeve(str(item[0])), str(item[0]))):
+        value = float(weight)
+        sleeve = _position_sleeve(str(ticker))
+        rows.append(
+            "<tr>"
+            f"<td>{escape(sleeve)}</td>"
+            f"<td>{escape(str(ticker))}</td>"
+            f"<td class=\"num\">{value:.2f}%</td>"
+            f"<td><div class=\"bar\"><span style=\"width:{max(0, min(100, value)):.2f}%\"></span></div></td>"
+            "</tr>"
+        )
+    return "<div class=\"table-scroll\"><table><thead><tr><th>Sleeve</th><th>Ticker</th><th class=\"num\">Proposed Weight</th><th>Scale</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
 
 
 def _orders_table(orders: list[dict[str, Any]]) -> str:
@@ -360,6 +424,13 @@ def _fmt_pct(value: Any) -> str:
     if value is None:
         return "n/a"
     return f"{float(value) * 100:.0f}%"
+
+
+def _position_sleeve(ticker: str) -> str:
+    normalized = ticker.strip().upper()
+    if normalized in CASH_EQUIVALENT_TICKERS:
+        return "cash"
+    return SLEEVE_BY_TICKER.get(normalized, "outside_race_universe")
 
 
 def _status_class(status: str) -> str:
