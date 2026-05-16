@@ -28,10 +28,10 @@ def test_read_positions_supports_brokerage_export_with_title_row(tmp_path) -> No
     assert parsed == {"DBMF": 6.83, "BND": 3.18}
 
 
-def test_available_cash_weight_uses_brokerage_cash_line_only() -> None:
+def test_available_cash_weight_includes_brokerage_cash_and_money_market_funds() -> None:
     positions = {"CASH & CASH INVESTMENTS": 3.78, "SWVXX": 20.08, "DBMF": 9.01}
 
-    assert _available_cash_weight(positions) == 3.78
+    assert _available_cash_weight(positions) == 23.86
 
 
 def test_missing_data_returns_diagnostic_only(tmp_path) -> None:
@@ -92,9 +92,9 @@ def test_buy_recommendations_are_limited_to_available_cash(tmp_path) -> None:
     data = json.loads((tmp_path / "race_order_list.json").read_text(encoding="utf-8"))
     buy_total = sum(order["dollar_change"] for order in data["orders"] if order["side"] == "BUY")
 
-    assert data["cash_available_for_buys"]["available_cash_dollars"] == 2000.0
+    assert data["cash_available_for_buys"]["available_cash_dollars"] == 22000.0
     assert data["cash_available_for_buys"]["cash_limited"] is True
-    assert buy_total <= 2000.01
+    assert buy_total <= 22000.01
     assert all(order["cash_adjustment_status"] == "CASH_LIMITED" for order in data["orders"] if order["side"] == "BUY")
     assert any("uncapped_dollar_change" in order for order in data["orders"] if order["side"] == "BUY")
 
