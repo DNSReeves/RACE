@@ -12,6 +12,7 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
         "regime_confidence": 1.0,
         "sleeve_targets": {"cash": 7.0, "us_equity_core": 30.0},
         "target_positions": {"SGOV": 7.0, "VTI": 30.0},
+        "current_positions": {"SWVXX": 20.0, "CASH & CASH INVESTMENTS": 2.0, "IVV": 4.0, "CPSM": 3.0},
         "selected_etfs": {"cash": ["SGOV"]},
         "orders": [
             {
@@ -65,6 +66,10 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
 
     assert "RACE Dry-Run Report" in html
     assert "Manual Review Ready" in html
+    assert "Current Positions" in html
+    assert "SWVXX" in html
+    assert "CASH &amp; CASH INVESTMENTS" in html
+    assert "outside_race_universe" in html
     assert "Sleeve Targets" in html
     assert "Dry-Run Orders" in html
     assert "VTI" in html
@@ -85,6 +90,8 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert "class=\"pill action-stage-entry\"" in html
     assert "class=\"pill persistence-unknown\"" in html
     assert "class=\"blockers\"" in html
+    assert "Proposed Positions By Sleeve" in html
+    assert "Proposed Weight" in html
     assert "broker" in html
 
 
