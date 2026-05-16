@@ -10,7 +10,18 @@ from pathlib import Path
 from race_engine.execution.pipeline import run_standalone_pipeline
 from race_engine.execution.sleeve_leader_review import sleeve_leaders_from_review
 
-CASH_POSITION_LABELS = {"CASH", "CASH & CASH INVESTMENTS"}
+CASH_POSITION_LABELS = {
+    "CASH",
+    "CASH & CASH INVESTMENTS",
+    "FDRXX",
+    "SPAXX",
+    "SPRXX",
+    "SNSXX",
+    "SNVXX",
+    "SWVXX",
+    "VMFXX",
+    "VUSXX",
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
