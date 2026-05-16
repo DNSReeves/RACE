@@ -37,6 +37,7 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
     sleeve_targets = artifact.get("sleeve_targets") or {}
     current_positions = artifact.get("current_positions") or {}
     target_positions = artifact.get("target_positions") or {}
+    migration_review = artifact.get("migration_to_pure_race") or {}
     gate_failures = artifact.get("gate_failures") or {}
     generated_at = _format_timestamp(artifact.get("timestamp"))
 
@@ -192,6 +193,12 @@ def render_order_html_report(artifact: dict[str, Any]) -> str:
       <h2>Sleeve Leader Review</h2>
       <div class="subtle">Diagnostic only. Does not authorize automatic sells or replacements.</div>
       {_sleeve_leader_review_table(sleeve_leader_review)}
+    </section>
+
+    <section class="panel leader-review" style="margin-top:16px;">
+      <h2>Migration To Pure RACE</h2>
+      <div class="subtle">Diagnostic only. Does not authorize sells, replacements, or broker activity.</div>
+      {_migration_review_table(migration_review)}
     </section>
 
     <section class="grid two" style="margin-top:16px;">
@@ -381,6 +388,32 @@ def _sleeve_leader_review_table(review: dict[str, Any]) -> str:
                 "</tr>"
             )
     return "<div class=\"table-scroll\"><table><thead><tr><th>Sleeve</th><th>Leader</th><th class=\"num\">Leader Score</th><th>Held Ticker</th><th class=\"num\">Held Score</th><th class=\"num\">Score Gap</th><th>Score Gap Tier</th><th>Entry Quality</th><th>Persistence</th><th>Replacement Action</th><th>Replacement Allowed</th><th>Blockers</th><th>Operator Note</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+
+
+def _migration_review_table(review: dict[str, Any]) -> str:
+    rows_data = review.get("rows") or []
+    if not rows_data:
+        return '<div class="subtle">No migration review available.</div>'
+    rows = []
+    for row in rows_data:
+        destinations = ", ".join(str(ticker) for ticker in row.get("suggested_destination_tickers", []))
+        rows.append(
+            "<tr>"
+            f"<td>{escape(str(row.get('current_ticker', '')))}</td>"
+            f"<td>{escape(str(row.get('classification', '')))}</td>"
+            f"<td class=\"num\">{_fmt_optional_num(row.get('current_weight'), 2)}%</td>"
+            f"<td class=\"num\">${_fmt_optional_num(row.get('estimated_value'), 2)}</td>"
+            f"<td>{escape(str(row.get('race_destination_sleeve', '')))}</td>"
+            f"<td>{escape(destinations)}</td>"
+            f"<td>{_pill(str(row.get('migration_action', '')), 'action')}</td>"
+            f"<td class=\"num\">{_fmt_optional_num(row.get('suggested_sell_percent'), 2)}%</td>"
+            f"<td class=\"num\">${_fmt_optional_num(row.get('suggested_sell_dollars'), 2)}</td>"
+            f"<td>{escape(str(row.get('entry_quality', '')))}</td>"
+            f"<td>{escape(str(row.get('cash_impact', '')))}</td>"
+            f"<td>{escape(str(row.get('operator_note', '')))}</td>"
+            "</tr>"
+        )
+    return "<div class=\"table-scroll\"><table><thead><tr><th>Current Ticker</th><th>Classification</th><th class=\"num\">Current Weight</th><th class=\"num\">Est. Value</th><th>RACE Destination Sleeve</th><th>Suggested Destination Tickers</th><th>Migration Action</th><th class=\"num\">Suggested Sell</th><th class=\"num\">Suggested Sell Dollars</th><th>Entry Quality</th><th>Cash Impact</th><th>Operator Note</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
 
 
 def _messages(messages: list[Any]) -> str:

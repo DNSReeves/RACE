@@ -58,6 +58,26 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
                 ],
             }
         },
+        "migration_to_pure_race": {
+            "diagnostic_only": True,
+            "tranche_fraction": 0.25,
+            "rows": [
+                {
+                    "current_ticker": "CPSM",
+                    "classification": "outside_race_universe",
+                    "current_weight": 3.0,
+                    "estimated_value": 3000.0,
+                    "race_destination_sleeve": "us_equity_core",
+                    "suggested_destination_tickers": ["IVV", "VTI"],
+                    "migration_action": "MIGRATE_IN_TRANCHES",
+                    "suggested_sell_percent": 25.0,
+                    "suggested_sell_dollars": 750.0,
+                    "entry_quality": "EXECUTE",
+                    "cash_impact": "raises_cash_for_race_targets",
+                    "operator_note": "CPSM is outside the RACE universe; consider migrating one tranche after manual review.",
+                }
+            ],
+        },
         "gate_failures": {"SPY": {"gate2": ["rsi14_gt_72"]}},
         "validation_messages": [],
     }
@@ -92,6 +112,10 @@ def test_order_html_report_contains_production_sections(tmp_path) -> None:
     assert "class=\"blockers\"" in html
     assert "Proposed Positions By Sleeve" in html
     assert "Proposed Weight" in html
+    assert "Migration To Pure RACE" in html
+    assert "Does not authorize sells, replacements, or broker activity." in html
+    assert "MIGRATE_IN_TRANCHES" in html
+    assert "Suggested Sell Dollars" in html
     assert "broker" in html
 
 

@@ -66,6 +66,7 @@ def test_dry_run_order_list_generated_but_not_transmitted(tmp_path) -> None:
     assert data["orders"]
     assert all("recommended_action" in order for order in data["orders"])
     assert data["sleeve_leader_review"]
+    assert data["migration_to_pure_race"]
     assert data["confirmed_regime"]
     assert data["sleeve_targets"]
     assert data["target_positions"]

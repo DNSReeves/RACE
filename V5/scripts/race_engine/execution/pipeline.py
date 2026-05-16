@@ -21,6 +21,7 @@ from race_engine.data.macro_loader import REQUIRED_TIER1_SERIES
 from race_engine.execution.order_list import proposed_order
 from race_engine.execution.rebalance import RebalanceTrigger, TriggerPriority, batch_triggers
 from race_engine.execution.replacement import replacement_decision
+from race_engine.execution.migration_review import MigrationReviewInputs, build_migration_review
 from race_engine.execution.sleeve_leader_review import (
     SleeveLeaderReviewInputs,
     build_sleeve_leader_review,
@@ -249,6 +250,15 @@ def _compute_pipeline(
             leader_persistence_by_sleeve=leader_persistence_status_by_sleeve(ranked, previous_sleeve_leaders),
         )
     )
+    migration_review = build_migration_review(
+        MigrationReviewInputs(
+            current_positions=current_positions,
+            target_positions=target_positions,
+            selected_etfs=selected_etfs,
+            orders=orders,
+            portfolio_value=portfolio_value,
+        )
+    )
 
     return {
         "confirmed_regime": regime.confirmed_regime,
@@ -260,6 +270,7 @@ def _compute_pipeline(
         "orders": orders,
         "cash_available_for_buys": cash_summary,
         "sleeve_leader_review": sleeve_leader_review,
+        "migration_to_pure_race": migration_review,
         "gate_failures": {report.ticker: report.gate_failures for report in gate_reports if report.gate_failures},
     }
 
@@ -405,6 +416,7 @@ def _base_artifact(
             "scale_factor": 1.0,
         },
         "sleeve_leader_review": {},
+        "migration_to_pure_race": {"diagnostic_only": True, "tranche_fraction": 0.25, "rows": []},
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "config_path": config_path,
         "market_data_source": market_data_source,
