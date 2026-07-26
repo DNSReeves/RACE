@@ -15,7 +15,7 @@ def test_cli_exits_safely_when_flag_omitted(tmp_path) -> None:
 def test_read_positions_supports_brokerage_export_with_title_row(tmp_path) -> None:
     positions = tmp_path / "positions.csv"
     positions.write_text(
-        '"Positions for account DNSR-IRA ...985 as of 05:27 PM ET, 2026/05/11"\n\n'
+        '"Positions for account TEST-IRA ...000 as of 05:27 PM ET, 2026/05/11"\n\n'
         '"Symbol","Description","Qty (Quantity)","% of Acct (% of Account)","Asset Type",\n'
         '"DBMF","Managed Futures","1,014","6.83%","ETFs & Closed End Funds",\n'
         '"CASH","Cash","--","--","Cash",\n'
